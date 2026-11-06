@@ -1,0 +1,10 @@
+{
+  "additionalFiles": "",
+  "builtInLibrariesFolders": "C:\\Users\\sophi\\AppData\\Local\\Arduino15\\libraries",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "",
+  "fqbn": "esp32:esp32:adafruit_feather_esp32s2:UploadSpeed=921600,CDCOnBoot=cdc,MSCOnBoot=default,DFUOnBoot=default,UploadMode=cdc,CPUFreq=240,FlashFreq=80,FlashMode=qio,FlashSize=4M,PartitionScheme=min_spiffs,DebugLevel=none,PSRAM=enabled,EraseFlash=none,ZigbeeMode=default",
+  "hardwareFolders": "C:\\Users\\sophi\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.12,C:\\Users\\sophi\\AppData\\Local\\Arduino15\\packages\\esp32\\hardware\\esp32\\3.3.12",
+  "otherLibrariesFolders": "c:\\Users\\sophi\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\sophi\\Desktop\\scopazpriv\\VesselMotionRecorder_VMR"
+}
