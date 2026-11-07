@@ -8,6 +8,8 @@ See overview PDF file for details. If you don't want to build your own, buy one 
 
 ## Example Figures / Plots from VMR
 
+All of the following figures were generated onboard a VMR (it can generate a plot even while logging, and even of the file that is open and logging) and downloaded to my phone before being uploaded here.
+
 ### Roll, Pitch, SOG, Roll Period
 <!-- ![example graph](/images/20261106_192455Z.png) -->
 <img src="images/20261106_192455Z.png" width="70%" alt="Description">
