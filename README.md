@@ -27,4 +27,4 @@ All of the following figures were generated onboard a VMR (it can generate a plo
 The following are the current screens that can be viewed on the OLED (v8.56). They are rotated through with a physical button on the VMR or via selection on the Wi-Fi dashboard. 
 
 <!-- ![OLED screens](/images/vmr_oled_screens-3.png) -->
-<img src="images/vmr_oled_screens-3.png" width="80%" alt="Description">
+<img src="images/vmr_oled_screens-4.png" width="80%" alt="Description">
