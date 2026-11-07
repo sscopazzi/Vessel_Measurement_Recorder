@@ -2,7 +2,7 @@
 See overview PDF file for details. If you don't want to build your own, buy one from my buisness: [aspectwave.io/](aspectwave.io/).
 
 [placeholder image]
-![placeholder image](VMR_placeholder.jpg)
+![placeholder image](/images/VMR_placeholder.jpg)
 
 ### Example Figures / Plots from VMR
 [image]
