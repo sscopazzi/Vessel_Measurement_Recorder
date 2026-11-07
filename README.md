@@ -1,5 +1,5 @@
 # Vessel-Measurement-Recorder
-See overview PDF file for details. If you don't want to build your own, buy one from my buisness: [aspectwave.io/](https://aspectwave.io/).
+See overview PDF file for details. If you don't want to build your own, buy one from my buisness: [aspectwave.io/](https://www.aspectwave.io/store/p/vessel-measurement-recorder).
 
 [placeholder image]
 <!-- ![placeholder image](/images/VMR_placeholder.jpg) -->
