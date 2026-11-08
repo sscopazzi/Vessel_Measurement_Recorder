@@ -26,7 +26,7 @@ All of the following figures were generated onboard a VMR (it can generate a plo
 The following are the current screens that can be viewed on the OLED (v8.56). They are rotated through with a physical button on the VMR or via selection on the Wi-Fi dashboard. 
 
 <!-- ![OLED screens](/images/vmr_oled_screens-3.png) -->
-<img src="images/VMR_v9.17_OLED_screens.png.png" width="80%" alt="Description">
+<img src="images/VMR_v9.17_OLED_screens.png" width="80%" alt="Description">
 
 ## LCD Screens
 The following are the current screens that can be viewed on the LCD (v9.x). By default, they are changed on the Wi-Fi Dashboard. If the system has no OLED (or it is disabled), they are changed with the screen button.
