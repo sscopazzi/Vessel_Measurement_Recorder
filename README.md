@@ -28,3 +28,8 @@ The following are the current screens that can be viewed on the OLED (v8.56). Th
 
 <!-- ![OLED screens](/images/vmr_oled_screens-3.png) -->
 <img src="images/vmr_oled_screens-4.png" width="80%" alt="Description">
+
+## LCD Screens
+The following are the current screens that can be viewed on the LCD (v9.x). They are changed on the Wi-Fi Dashboard. If no OLED enabled in the system, they are changed with the screen button.
+
+<img src="images/VMR_v9.0_LCD_screens.png" width="80%" alt="Description">
