@@ -1,6 +1,6 @@
 # Vessel Measurement Recorder (VMR) + SeaLabMOS
 
-**[Try the demo](https://sscopazzi.github.io/VMR/docs/vmr-demo.html)**: the VMR box (OLED, 7-segment, LCD, buttons, knob and lights), the WTB's Niskin buttons and the dashboard, running in your browser on simulated data. It is a demo: nothing in it is a real measurement.
+**[Try the demo](https://sscopazzi.github.io/Vessel_Measurement_Recorder/docs/vmr-demo.html)**: the VMR box (OLED, 7-segment, LCD, buttons, knob and lights), the WTB's Niskin buttons and the dashboard, running in your browser on simulated data. It is a demo: nothing in it is a real measurement.
 
 An open-source, weatherproof instrument built from off-the-shelf Adafruit parts. It logs ship motion, position, waves and weather to microSD at 10 Hz, marks events with one button, and serves a live dashboard to any phone or laptop over its own Wi-Fi. With SeaLabMOS it also runs a CTD on a tether and fires six Niskin bottles.
 
