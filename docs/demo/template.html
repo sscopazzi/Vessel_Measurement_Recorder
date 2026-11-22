@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VMR Demo (simulated data)</title>
+<meta name="description" content="A demo of the Vessel Measurement Recorder: its OLED screens, 7-segment, LCD, buttons, lights and dashboard, running on simulated data in the browser.">
+<style>
+:root{
+  --bg:#e9edf1; --ink:#14202b; --mut:#5a6b7a; --line:#c6d0d9; --card:#f8fafc;
+  --case:#3b4651; --case2:#2c353e; --case-ink:#dfe7ee; --case-mut:#9fb0bf; --plate:#232b33;
+  --demo:#f2b705; --demo-ink:#1d1600; --accent:#0d6e8a; --focus:#ffb000;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#10161c; --ink:#e4ebf1; --mut:#93a3b2; --line:#2a3640; --card:#161e25; --case:#2f3943; --case2:#222a32; --plate:#1a2128;
+}}
+:root[data-theme="dark"]{ --bg:#10161c; --ink:#e4ebf1; --mut:#93a3b2; --line:#2a3640; --card:#161e25; --case:#2f3943; --case2:#222a32; --plate:#1a2128; }
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.demo-bar{position:sticky;top:0;z-index:10;background:var(--demo);color:var(--demo-ink);padding:8px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+  border-bottom:2px solid #8a6800;box-shadow:0 2px 6px #0003}
+.demo-bar b.tag{background:var(--demo-ink);color:var(--demo);padding:2px 8px;border-radius:4px;letter-spacing:.08em}
+.demo-bar span{flex:1 1 420px}
+.demo-bar a{color:var(--demo-ink);font-weight:600}
+@media (max-width:700px){ .demo-bar{position:static;font-size:13px;padding:8px 12px} .wrap{padding:10px 10px 30px} }
+.wrap{max-width:1500px;margin:0 auto;padding:12px 16px 40px}
+.ctl{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}
+.ctl label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--mut)}
+.ctl label b{color:var(--ink);font-weight:600;min-width:54px;font-variant-numeric:tabular-nums}
+.ctl select,.ctl input[type=range]{accent-color:var(--accent)}
+.ctl select{font:inherit;padding:4px 6px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.ctl input[type=range]{width:120px}
+.seg-btns{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg-btns button{font:inherit;font-size:13px;border:0;padding:4px 10px;background:var(--bg);color:var(--ink);cursor:pointer}
+.seg-btns button[aria-pressed=true]{background:var(--accent);color:#fff}
+.note{font-size:13px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:minmax(0,560px) minmax(0,1fr);gap:16px;margin-top:12px;align-items:start}
+@media (max-width:1100px){ .grid{grid-template-columns:minmax(0,1fr)} }
+/* ---- the boxes */
+.box{background:linear-gradient(180deg,var(--case),var(--case2));color:var(--case-ink);border-radius:18px;padding:14px 14px 16px;box-shadow:inset 0 1px 0 #ffffff22,0 4px 14px #0004;margin-bottom:14px;position:relative}
+.box h2{margin:0 0 10px;font-size:14px;letter-spacing:.06em;font-weight:600;color:var(--case-mut);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.box h2 i{font-style:normal;color:var(--demo)}
+.plate{background:var(--plate);border-radius:10px;padding:10px;box-shadow:inset 0 2px 6px #0007}
+.lbl{font-size:11px;letter-spacing:.06em;color:var(--case-mut);text-transform:uppercase;margin:0 0 4px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.oled{width:100%;max-width:400px;aspect-ratio:2/1;display:block;image-rendering:pixelated;background:#000;border-radius:3px;border:6px solid #050608;box-shadow:0 0 0 1px #000}
+.oled-unit{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.seg7{display:block;width:210px;height:auto;background:#140404;border-radius:4px;border:5px solid #070808}
+.lcd{display:inline-grid;grid-template-columns:repeat(20,.78em);gap:0 1px;padding:7px 9px;border-radius:4px;border:5px solid #070808;background:#06080a;font:600 16px/1.3 ui-monospace,"Cascadia Mono",Consolas,monospace;max-width:100%}
+.lcd span{text-align:center;height:1.3em}
+.leds{display:flex;gap:16px}
+.led{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--case-mut)}
+.led i{width:16px;height:16px;border-radius:50%;background:#2a1b1b;box-shadow:inset 0 -2px 3px #0008;display:block}
+.ctrls{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:center}
+.bu{display:flex;flex-direction:column;align-items:center;gap:4px}
+.bu .pair{display:flex;align-items:center;gap:4px}
+.hw{appearance:none;border:0;cursor:pointer;width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#5a6672,#252d35);box-shadow:0 3px 0 #11161b,0 4px 6px #0006;
+  color:#e8eef3;font:600 10px system-ui;touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .05s}
+.hw.down{transform:translateY(3px);box-shadow:0 0 0 #11161b,0 1px 3px #0006;background:radial-gradient(circle at 40% 35%,#6c7a87,#2c353e)}
+.hw.red{background:radial-gradient(circle at 40% 35%,#d4574a,#7a1d16)} .hw.red.down{background:radial-gradient(circle at 40% 35%,#e8695b,#8c241c)}
+.hw.sm{width:36px;height:36px}
+.hold{appearance:none;font:600 10px system-ui;padding:3px 6px;border-radius:5px;border:1px solid #6b7987;background:transparent;color:var(--case-mut);cursor:pointer}
+.hold[aria-pressed=true]{background:var(--demo);color:var(--demo-ink);border-color:var(--demo)}
+.bu .cap{font-size:11px;color:var(--case-ink);text-align:center;max-width:90px;line-height:1.15}
+.bu .t{font-size:10px;color:var(--demo);height:12px;font-variant-numeric:tabular-nums}
+.knob-unit{display:flex;flex-direction:column;align-items:center;gap:4px}
+.knob{width:70px;height:70px;border-radius:50%;cursor:grab;touch-action:none;position:relative;background:radial-gradient(circle at 40% 35%,#4b4f55,#16191c);box-shadow:0 4px 8px #0008,inset 0 0 0 4px #2b3036}
+.knob::after{content:"";position:absolute;left:50%;top:7px;width:4px;height:18px;margin-left:-2px;border-radius:2px;background:#f4f4f4}
+.knob:focus-visible,.hw:focus-visible,.hold:focus-visible,.sw:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.sw{appearance:none;border:0;cursor:pointer;width:44px;height:24px;border-radius:12px;background:#1a2026;position:relative;box-shadow:inset 0 2px 3px #000a}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#8a96a2;transition:left .12s}
+.sw[aria-checked=true]{background:#1f6b3a} .sw[aria-checked=true]::after{left:23px;background:#e9f2ea}
+.swu{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--case-mut)}
+.opt{margin-top:12px;border-top:1px dashed #ffffff22;padding-top:10px}
+.ring{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;box-shadow:inset 0 0 0 4px #333c44}
+.ring.on{box-shadow:inset 0 0 0 4px #ff3b2f,0 0 12px #ff3b2f99}
+.nk{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.help{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px}
+.help h3{margin:4px 0 6px;font-size:15px}
+.help ul{margin:0;padding-left:18px} .help li{margin:3px 0}
+.dash{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:sticky;top:56px}
+.dash h2{margin:0;padding:8px 12px;font-size:14px;font-weight:600;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.dash h2 span{color:var(--mut);font-weight:400}
+.dash iframe{display:block;width:100%;height:calc(100vh - 110px);min-height:640px;border:0;background:#fff}
+@media (max-width:1100px){ .dash{position:static} .dash iframe{height:900px} }
+.off-note{position:absolute;inset:auto 14px 14px auto;font-size:11px;color:var(--demo)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="demo-bar" role="note">
+  <b class="tag">DEMO</b>
+  <span><b>Simulated data: nothing here is a real measurement.</b> The VMR %VER% firmware's own screen, button and display code and its real dashboard run in your browser, fed by a made-up ship, sea and weather.</span>
+  <a href="https://github.com/sscopazzi/VMR">Source and docs</a>
+</div>
+<div class="wrap">
+  <div class="ctl" aria-label="Simulator">
+    <label>Scenario <select id="scen"></select></label>
+    <label>Sea state (Hs) <input id="hs" type="range" min="0" max="7" step="0.1"><b id="hsv"></b></label>
+    <label>Roll period <input id="tr" type="range" min="6" max="22" step="0.1"><b id="trv"></b></label>
+    <label>Wind <input id="wind" type="range" min="0" max="60" step="1"><b id="windv"></b></label>
+    <label>Battery <input id="batt" type="range" min="0" max="100" step="1"><b id="battv"></b></label>
+    <label><input id="usb" type="checkbox"> USB power (charging)</label>
+    <label>Time <span class="seg-btns" id="speed"><button data-s="1">×1</button><button data-s="10">×10</button><button data-s="60">×60</button></span></label>
+    <span class="note">Time runs at ×1 while a button is down.</span>
+  </div>
+
+  <div class="grid">
+    <div>
+      <section class="box" aria-label="The VMR box">
+        <h2>VMR · VESSEL MEASUREMENT RECORDER <i>DEMO, SIMULATED</i></h2>
+        <div class="plate">
+          <div class="lbl">OLED (screen <span id="scrn">1</span> of 23)</div>
+          <div class="oled-unit">
+            <canvas id="oled" class="oled" width="128" height="64" aria-label="The OLED screen"></canvas>
+            <div class="bu" data-btn="b"><div class="pair"><button class="hw sm" aria-label="Button B">B</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">OLED B</div><div class="t"></div></div>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <div><div class="lbl">7-segment</div><svg id="seg" class="seg7" viewBox="0 0 230 80" aria-label="The 7-segment display"></svg></div>
+            <div><div class="lbl">Lights</div><div class="leds">
+              <div class="led"><i id="ledMark"></i>Mark</div><div class="led"><i id="ledRec"></i>Recording</div><div class="led"><i id="ledFault"></i>Fault</div></div></div>
+          </div>
+          <div style="margin-top:10px"><div class="lbl">LCD 20×4</div><div id="lcd" class="lcd" aria-label="The LCD"></div></div>
+        </div>
+        <div class="ctrls" style="margin-top:12px">
+          <div class="bu" data-btn="scr"><div class="pair"><button class="hw" aria-label="Screen button">SCREEN</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Screen</div><div class="t"></div></div>
+          <div class="bu" data-btn="mark"><div class="pair"><button class="hw red" aria-label="Mark button">MARK</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Mark</div><div class="t"></div></div>
+          <div class="knob-unit"><div id="knob" class="knob" role="slider" tabindex="0" aria-label="Brightness knob" aria-valuemin="0" aria-valuemax="100"></div><div class="cap" style="font-size:11px">Knob <b id="knobv"></b></div></div>
+          <div class="swu"><button id="knobsw" class="sw" role="switch" aria-checked="true" aria-label="Knob switch (displays on / off)"></button>Knob switch</div>
+          <div class="swu"><button id="power" class="sw" role="switch" aria-checked="true" aria-label="Power switch"></button>Power</div>
+        </div>
+        <div class="opt"><div class="lbl">Optional buttons (card 17)</div><div class="ctrls">
+          <div class="bu" data-btn="xb0"><div class="pair"><button class="hw sm" aria-label="Cast button">CAST</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Cast</div><div class="t"></div></div>
+          <div class="bu" data-btn="xb1"><div class="pair"><button class="hw sm" aria-label="Record button">REC</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Record</div><div class="t"></div></div>
+          <div class="bu" data-btn="xb2"><div class="pair"><button class="hw sm" aria-label="Pause button">PAUSE</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Pause</div><div class="t"></div></div>
+          <div class="bu" data-btn="xb3"><div class="pair"><button class="hw sm" aria-label="Wi-Fi button">WI-FI</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Wi-Fi</div><div class="t"></div></div>
+          <div class="bu" data-btn="xb4"><div class="pair"><button class="hw sm" aria-label="Screen jump button">JUMP</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap" id="xbcap">Screen jump</div><div class="t"></div></div>
+        </div></div>
+        <div id="offnote" class="off-note"></div>
+      </section>
+
+      <section class="box" aria-label="The WTB box">
+        <h2>WTB · SEALABMOS WET-TALK BOARD <i id="wtbst">OFF</i></h2>
+        <div class="ctrls">
+          <div class="bu" data-btn="tare"><div class="pair"><button class="hw sm" aria-label="Tare button">TARE</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Tare</div><div class="t"></div></div>
+          <div class="bu" data-btn="start"><div class="pair"><button class="hw sm red" aria-label="Start cast button">START</button><button class="hold" aria-pressed="false">hold</button></div><div class="cap">Start cast</div><div class="t"></div></div>
+          <div class="led"><i id="ledEth"></i>Ethernet down</div>
+          <div class="led"><i id="ledReady"></i>Ready</div>
+        </div>
+        <div class="lbl" style="margin-top:12px">Niskin bottles (hold 1.5 s to fire an armed one)</div>
+        <div class="nk" id="nk"></div>
+      </section>
+
+      <section class="help">
+        <h3>Things to try</h3>
+        <ul>
+          <li><b>Screen</b> or <b>B</b>: the next screen. <b>Hold Screen</b> for 1 s: the knob picks an action (KNOB SEL), let go to do it.</li>
+          <li><b>Mark</b>: a tap makes a location mark; held 1.5 s it starts or stops a cast.</li>
+          <li>Hold <b>Screen</b> (its hold toggle) and tap <b>Mark</b>: the 7-segment steps to its next reading.</li>
+          <li>Knob: drag it, scroll on it or use the arrow keys (the brightness, or the action while Screen is held).</li>
+          <li>Pick <b>CTD cast with Niskin bottles</b>, then press <b>Start cast</b> on the WTB. Bottles 1-3 fire at their planned depths; hold 4-6 to fire them by hand.</li>
+          <li>Run the battery down at ×60 to see the 3.30 V shutdown. It stays off until you switch the power off and on (charge it first with USB power).</li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="dash" aria-label="The dashboard">
+      <h2>Dashboard <span>the VMR's own web page, as a phone on its hotspot sees it (simulated)</span></h2>
+      <iframe id="dash" title="VMR dashboard (demo, simulated data)"></iframe>
+    </section>
+  </div>
+</div>
+<script>
+const FW_VER = '%VER%';
+%WASM_B64%
+%DASH_HTML%
+%LOGO_SVG%
+</script>
+<script>
+%JS%
+</script>
+</body>
+</html>
