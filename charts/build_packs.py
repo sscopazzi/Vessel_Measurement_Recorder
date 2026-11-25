@@ -4,6 +4,7 @@
     python3 build_packs.py --out packs/                      everything, downloading what's needed from NOAA
     python3 build_packs.py --out packs/ --only san-francisco-bay
     python3 build_packs.py --out packs/ --mbtiles ~/Downloads   use NOAA files already downloaded (no internet)
+    python3 build_packs.py --out packs/ --previous last/packs.json   nothing built if nothing changed since then
 
 NOAA publishes one MBTiles file per region of the coast (https://distribution.charts.noaa.gov/ncds/index.html,
 updated weekly), and doesn't publish which file covers what. This script reads each file's coverage from its
@@ -11,7 +12,10 @@ first 64 KB (the MBTiles metadata sits at the front), downloads only the files t
 the pack from them. GitHub runs it each month (.github/workflows/charts.yml) and publishes the packs as a
 release; it runs the same way on a laptop.
 
-Writes <out>/<name>.vmrchart for each pack and <out>/packs.json (what was built, from which NOAA files)."""
+Writes <out>/<name>.vmrchart for each pack and <out>/packs.json: what was built, from which NOAA files, and a
+fingerprint of what it was built from (each NOAA file's size and Last-Modified, regions.json and the pack
+tools). With --previous (the last release's packs.json), when the fingerprint is the same nothing is
+downloaded or built: <out>/UNCHANGED is written instead and the workflow publishes nothing."""
 import argparse, glob, hashlib, json, os, sqlite3, sys, time, urllib.request, email.utils, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from make_vmrchart import build, EXT
@@ -56,7 +60,7 @@ def coverage(url, cache):
     try:
         m = read_meta(tmp)
         info = {"bounds": [float(v) for v in m["bounds"].split(",")], "minz": int(m.get("minzoom", 0)),
-                "maxz": int(m.get("maxzoom", 0)), "bytes": total}
+                "maxz": int(m.get("maxzoom", 0)), "bytes": total, "modified": r.headers.get("Last-Modified") or ""}
     except Exception as e:
         print("  %s: couldn't read its coverage (%s), skipping it" % (url, e)); info = None
     os.remove(tmp)
@@ -94,6 +98,17 @@ def download(url, folder):
     return path
 
 
+def fingerprint(regions, use, files, tools):
+    """What the packs are made from: the NOAA files each one uses (size, Last-Modified), the regions and the tools."""
+    noaa = {}
+    for name in sorted({os.path.basename(s) for u in use.values() for s in u}):
+        s = next(x for u in use.values() for x in u if os.path.basename(x) == name)
+        noaa[name] = {"bytes": files[s]["bytes"], "modified": files[s].get("modified", "")}
+    return {"noaa": noaa, "packs": {r["name"]: [os.path.basename(s) for s in use[r["name"]]] for r in regions},
+            "regions": hashlib.sha256(json.dumps(regions, sort_keys=True).encode()).hexdigest(),
+            "tools": hashlib.sha256(b"".join(open(t, "rb").read() for t in tools)).hexdigest()}
+
+
 def sha256(path):
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -109,6 +124,8 @@ def main():
     ap.add_argument("--only", nargs="*", help="pack names to build (default: all)")
     ap.add_argument("--mbtiles", help="a folder of NOAA .mbtiles files already downloaded (nothing is downloaded)")
     ap.add_argument("--work", default="noaa", help="folder for NOAA downloads (default ./noaa)")
+    ap.add_argument("--previous", help="the last release's packs.json: build nothing if nothing has changed since")
+    ap.add_argument("--force", action="store_true", help="build even if nothing has changed")
     a = ap.parse_args()
     regions = [r for r in json.load(open(a.regions))["regions"] if not a.only or r["name"] in a.only]
     if not regions: sys.exit("no such pack in " + a.regions)
@@ -119,7 +136,8 @@ def main():
         for p in sorted(glob.glob(os.path.join(a.mbtiles, "*.mbtiles"))):
             m = read_meta(p)
             files[p] = {"bounds": [float(v) for v in m["bounds"].split(",")], "minz": int(m.get("minzoom", 0)),
-                        "maxz": int(m.get("maxzoom", 0)), "bytes": os.path.getsize(p)}
+                        "maxz": int(m.get("maxzoom", 0)), "bytes": os.path.getsize(p),
+                        "modified": email.utils.formatdate(os.path.getmtime(p), usegmt=True)}
     else:
         cache = {"_dir": a.work}
         urls = noaa_files(); print("%d NOAA files listed; reading their coverage" % len(urls))
@@ -130,12 +148,30 @@ def main():
         print("  %-16s %8.1f MB  zoom %2d-%-2d  %s" % (os.path.basename(s), i["bytes"] / 1e6, i["minz"], i["maxz"],
                                                      ", ".join("%.2f" % v for v in i["bounds"])))
 
-    done = []
+    uses = {}
     for reg in regions:
         box = region_box(reg)
         use = [s for s, i in files.items() if overlaps(box, i["bounds"])]
         # the most detailed file first: where two files both have chart on a tile, the deeper-zoom, smaller file wins
         use.sort(key=lambda s: (-files[s]["maxz"], (files[s]["bounds"][2] - files[s]["bounds"][0]) * (files[s]["bounds"][3] - files[s]["bounds"][1])))
+        uses[reg["name"]] = use
+    fp = fingerprint(regions, uses, files, [os.path.join(here, "make_vmrchart.py"), __file__])
+    if a.previous and not a.force and not a.only and os.path.exists(a.previous):
+        try: prev = json.load(open(a.previous)).get("fingerprint")
+        except Exception: prev = None
+        if prev == fp:
+            print("NOAA's files, the regions and the tools are the same as for %s: nothing to build" % a.previous)
+            open(os.path.join(a.out, "UNCHANGED"), "w").write("unchanged since the last release\n")
+            return
+        if prev:
+            for n, v in fp["noaa"].items():
+                if prev.get("noaa", {}).get(n) != v: print("  changed since the last release: %s (%s)" % (n, v["modified"] or "no date"))
+            for k in ("packs", "regions", "tools"):
+                if prev.get(k) != fp[k]: print("  changed since the last release: %s" % k)
+
+    done = []
+    for reg in regions:
+        use = uses[reg["name"]]; box = region_box(reg)
         if not use:
             print("%s: no NOAA file covers it, skipped" % reg["name"]); continue
         print("%s: from %s" % (reg["name"], ", ".join(os.path.basename(s) for s in use)))
@@ -144,7 +180,7 @@ def main():
         done.append({"name": reg["name"], "title": reg["title"], "file": os.path.basename(p), "bytes": os.path.getsize(p),
                      "sha256": sha256(p), "bounds": box, "noaa": [os.path.basename(s) for s in use],
                      "chart_date": time.strftime("%Y-%m-%d", time.gmtime(max(os.path.getmtime(x) for x in paths)))})
-    json.dump({"built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "extension": EXT, "packs": done},
+    json.dump({"built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "extension": EXT, "packs": done, "fingerprint": fp},
               open(os.path.join(a.out, "packs.json"), "w"), indent=1)
     if len(done) < len(regions): sys.exit("%d of %d packs built" % (len(done), len(regions)))
     print("%d packs built in %s" % (len(done), a.out))

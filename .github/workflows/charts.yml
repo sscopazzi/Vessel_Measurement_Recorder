@@ -1,5 +1,7 @@
-# Builds the VMR chart packs (charts/regions.json) from NOAA's latest charts each month and publishes
-# them as a release named charts-YYYY-MM-DD. Run it by hand from the Actions tab too ("Run workflow").
+# Builds the VMR chart packs (charts/regions.json) from NOAA's latest charts and publishes them as a release
+# named charts-YYYY-MM-DD. Checked each month; only when NOAA's files (or the regions or pack tools) have
+# changed since the last charts- release is anything built and published. Run it by hand from the Actions tab
+# too ("Run workflow"; tick "Build even if nothing changed" to force it).
 name: Chart packs
 
 on:
@@ -11,6 +13,10 @@ on:
         description: "Pack names to build, separated by spaces (blank for all)"
         required: false
         default: ""
+      force:
+        description: "Build even if nothing changed"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,22 +35,32 @@ jobs:
       - name: Install Pillow
         run: pip install pillow
 
+      - name: The last release's packs.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '[.[] | select(.tag_name | startswith("charts-"))][0].tag_name // empty')
+          if [ -n "$TAG" ]; then gh release download "$TAG" -R "${{ github.repository }}" -p packs.json -D prev && echo "Last chart release: $TAG"; else echo "No chart release yet"; fi
+
       - name: Build the packs
         run: |
           ONLY="${{ github.event.inputs.only }}"
-          python3 charts/build_packs.py --out packs --work noaa ${ONLY:+--only $ONLY}
+          FORCE="${{ github.event.inputs.force }}"
+          python3 charts/build_packs.py --out packs --work noaa --previous prev/packs.json ${ONLY:+--only $ONLY} $([ "$FORCE" = "true" ] && echo --force)
           ls -la packs
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ -f packs/UNCHANGED ]; then echo "NOAA's charts haven't changed since the last release: nothing published"; exit 0; fi
           TAG="charts-$(date -u +%Y-%m-%d)"
           python3 - > notes.md <<'PY'
           import json
           p = json.load(open("packs/packs.json"))
           print("VMR chart packs built %s from NOAA's Chart Display Service (ENC). **Not for navigation.**\n" % p["built"])
           print("Download a pack, then on the VMR dashboard go to Setup › Charts and upload it (not while recording).\n")
+          print("NOAA's date is when NOAA last made its chart tiles for that area (from its download server).\n")
           print("| Pack | Area | Size | NOAA charts as of | NOAA files |\n|---|---|---|---|---|")
           for k in p["packs"]:
               print("| %s | %s | %.0f MB | %s | %s |" % (k["file"], k["title"], k["bytes"] / 1e6, k["chart_date"], ", ".join(k["noaa"])))
