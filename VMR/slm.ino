@@ -98,7 +98,17 @@ void lnkPeer(const uint8_t* mac, bool encrypt) {
 }
 void lnkStart() {
   if (lnkOn) return;
-  if (!slmRxQ) { slmRxQ = xQueueCreate(16, sizeof(SlmRx)); slmFileQ = xQueueCreate(24, sizeof(SlmRx)); slmFwQ = xQueueCreate(16, sizeof(SlmRx)); }
+  // the receive queues (56 frames of 257 bytes, about 14 KB) in PSRAM: internal RAM is what the Wi-Fi needs to let a phone join
+  if (!slmRxQ) {
+    slmRxQ   = xQueueCreateWithCaps(16, sizeof(SlmRx), MALLOC_CAP_SPIRAM);
+    slmFileQ = xQueueCreateWithCaps(24, sizeof(SlmRx), MALLOC_CAP_SPIRAM);
+    slmFwQ   = xQueueCreateWithCaps(16, sizeof(SlmRx), MALLOC_CAP_SPIRAM);
+    if (!slmRxQ || !slmFileQ || !slmFwQ) {                                   // no PSRAM: internal RAM, as a last resort
+      if (!slmRxQ)   slmRxQ   = xQueueCreate(16, sizeof(SlmRx));
+      if (!slmFileQ) slmFileQ = xQueueCreate(24, sizeof(SlmRx));
+      if (!slmFwQ)   slmFwQ   = xQueueCreate(16, sizeof(SlmRx));
+    }
+  }
   if (esp_now_init() != ESP_OK) return;
   esp_now_set_pmk(LNK_PMK);
   esp_now_register_recv_cb(lnkRecv);
@@ -652,7 +662,7 @@ void handleSlmSet() {
   if (has("nkon")) slmReqNkOn = num("nkon") ? 1 : 0;
   bool nkAsk = has("nkspd") || has("nkplan") || has("nkfire") || has("nkarm") || has("nksafe") || has("nkarmall") || has("nksafeall") || has("nkreset");
   if (nkAsk && (!P.slmOn || !nkEnabled() || !slmArmed)) {            // said so, instead of dropping it
-    server.send(409, "text/plain", !P.slmOn || !nkEnabled() ? "Niskin bottles are off (card 16)" : "Arm the cast session first (card 8)"); return;
+    server.send(409, "text/plain", !P.slmOn || !nkEnabled() ? "Niskin bottles are off (the Add-ons card)" : "Arm the cast session first (the Location marks card)"); return;
   }
   auto nkAct = [&](const char* k, uint8_t a, bool one) {
     if (!has(k)) return true;
