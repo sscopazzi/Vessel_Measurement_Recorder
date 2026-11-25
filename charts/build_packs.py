@@ -18,7 +18,7 @@ from make_vmrchart import build, EXT
 
 CATALOG = "https://raw.githubusercontent.com/chartcatalogs/catalogs/master/NOAA_MBTiles_Catalog.xml"
 BASE = "https://distribution.charts.noaa.gov/ncds/mbtiles/"
-UA = {"User-Agent": "VMR chart pack builder (github.com/sscopazzi/VMR)"}
+UA = {"User-Agent": "VMR chart pack builder (github.com/sscopazzi/Vessel_Measurement_Recorder)"}
 
 
 def get(url, rng=None, tries=4):
