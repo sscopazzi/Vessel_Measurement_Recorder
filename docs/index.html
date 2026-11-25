@@ -84,6 +84,12 @@ a{color:var(--accent)}
 .dash h2 span{color:var(--mut);font-weight:400}
 .dash iframe{display:block;width:100%;height:calc(100vh - 110px);min-height:640px;border:0;background:#fff}
 @media (max-width:1100px){ .dash{position:static} .dash iframe{height:900px} }
+/* the dashboard as a phone (390 px wide) or a laptop (the full width, under the boxes) */
+.dash h2 .seg-btns{flex:none}
+.dash.phone iframe{width:390px;max-width:100%;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.dash{scroll-margin-top:70px}
+.grid.desk .dash{grid-column:1/-1;position:static}
+.grid.desk .dash iframe{height:calc(100vh - 80px);min-height:700px}
 .off-note{position:absolute;inset:auto 14px 14px auto;font-size:11px;color:var(--demo)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
@@ -166,7 +172,8 @@ a{color:var(--accent)}
     </div>
 
     <section class="dash" aria-label="The dashboard">
-      <h2>Dashboard <span>the VMR's own web page, as a phone on its hotspot sees it (simulated)</span></h2>
+      <h2>Dashboard <span id="dviewt">the VMR's own web page, as a phone on its hotspot sees it (simulated)</span>
+        <span class="seg-btns" role="group" aria-label="Show the dashboard as"><button type="button" data-v="phone" aria-pressed="false">Phone</button><button type="button" data-v="desk" aria-pressed="false">Desktop</button></span></h2>
       <iframe id="dash" title="VMR dashboard (demo, simulated data)"></iframe>
     </section>
   </div>
@@ -959,8 +966,10 @@ class Dash {
       if (!r) { this.onerror && this.onerror(); return; } this.readyState = 4; this.status = r.status; this.responseText = this.response = r.body; this.onload && this.onload(); this.onreadystatechange && this.onreadystatechange(); }, 300); };
     window.XMLHttpRequest = X;
     addEventListener('DOMContentLoaded', () => { const d = document.createElement('div');
-      d.textContent = 'DEMO · simulated data'; d.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:99999;background:#f2b705;color:#1d1600;font:700 12px system-ui;padding:4px 8px;border-radius:5px;box-shadow:0 1px 4px #0005;pointer-events:none';
-      document.body.appendChild(d); });
+      d.textContent = 'DEMO · simulated data'; d.className = 'demobadge';
+      const st = document.createElement('style');   // above the phone's bottom bar, not over it
+      st.textContent = '.demobadge{position:fixed;right:8px;bottom:8px;z-index:99999;background:#f2b705;color:#1d1600;font:700 12px system-ui;padding:4px 8px;border-radius:5px;box-shadow:0 1px 4px #0005;pointer-events:none}@media (max-width:899px){.demobadge{bottom:calc(72px + env(safe-area-inset-bottom))}}';
+      document.head.appendChild(st); document.body.appendChild(d); });
   } + ')();<\/script>';
   const reloadDash = () => { $('dash').srcdoc = DASH_HTML.replace('<head>', '<head>' + INJECT); };
   reloadDash();
@@ -1035,6 +1044,22 @@ class Dash {
 })();
 
 
+</script>
+<script>
+// Phone / Desktop: the dashboard 390 px wide, or the full width under the boxes (its desktop layout). Desktop by default on a wide screen.
+(() => {
+  const grid = document.querySelector('.grid'), dash = document.querySelector('.dash'), btns = dash.querySelectorAll('h2 .seg-btns button');
+  let v = null; try { v = localStorage.getItem('demoView'); } catch (e) {}
+  if (v !== 'phone' && v !== 'desk') v = innerWidth >= 1000 ? 'desk' : 'phone';
+  const set = (nv, scroll) => { v = nv;
+    grid.classList.toggle('desk', v === 'desk'); dash.classList.toggle('phone', v === 'phone');
+    btns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+    document.getElementById('dviewt').textContent = "the VMR's own web page, as " + (v === 'desk' ? 'a laptop' : 'a phone') + ' on its hotspot sees it (simulated)';
+    try { localStorage.setItem('demoView', v); } catch (e) {}
+    if (scroll) dash.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
+  btns.forEach(b => b.onclick = () => set(b.dataset.v, true));
+  set(v, false);
+})();
 </script>
 </body>
 </html>
