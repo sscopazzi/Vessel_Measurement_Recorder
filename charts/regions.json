@@ -1,0 +1,150 @@
+{
+  "about": "Chart packs built from NOAA's Chart Display Service MBTiles (checked each month, built when NOAA's files change). Each area is west, south, east, north in degrees and the deepest zoom kept there: out to about 200 nm offshore light (zoom 10), the region out to 60-80 nm at 12 or 13, a band about 5 nm wide along the coast and the straits and sounds deeper, harbours deepest. Every pack starts at zoom 3, where NOAA's charts start, so they show however far out the map is zoomed. Zoom 10 shows about 40 km across a phone screen, 12 about 10 km, 14 about 2.5 km, 16 about 600 m. The VMR holds 8 packs at most.",
+  "regions": [
+    {
+      "name": "juan-de-fuca-puget-sound",
+      "title": "Strait of Juan de Fuca and Puget Sound",
+      "minz": 3,
+      "areas": [
+        {"label": "Region", "bbox": [-125.3, 46.9, -122.0, 49.3], "maxz": 12},
+        {"label": "Strait of Juan de Fuca", "bbox": [-124.8, 48.0, -122.6, 48.6], "maxz": 14},
+        {"label": "Puget Sound", "bbox": [-123.2, 47.0, -122.2, 48.2], "maxz": 14},
+        {"label": "San Juan Islands and Rosario Strait", "bbox": [-123.3, 48.35, -122.4, 48.85], "maxz": 14},
+        {"label": "Neah Bay", "bbox": [-124.68, 48.34, -124.58, 48.4], "maxz": 16},
+        {"label": "Port Angeles", "bbox": [-123.5, 48.1, -123.38, 48.15], "maxz": 16},
+        {"label": "Port Townsend", "bbox": [-122.8, 48.08, -122.72, 48.13], "maxz": 16},
+        {"label": "Seattle, Elliott Bay", "bbox": [-122.43, 47.56, -122.32, 47.64], "maxz": 16},
+        {"label": "Tacoma, Commencement Bay", "bbox": [-122.47, 47.24, -122.38, 47.3], "maxz": 16},
+        {"label": "Everett", "bbox": [-122.24, 47.96, -122.17, 48.03], "maxz": 16},
+        {"label": "Bellingham", "bbox": [-122.54, 48.71, -122.47, 48.77], "maxz": 16},
+        {"label": "Anacortes", "bbox": [-122.64, 48.49, -122.57, 48.53], "maxz": 16},
+        {"label": "Friday Harbor", "bbox": [-123.03, 48.52, -122.99, 48.56], "maxz": 16}
+      ]
+    },
+    {
+      "name": "washington-outer-coast",
+      "title": "Washington outer coast",
+      "minz": 3,
+      "areas": [
+        {"label": "Offshore, to about 200 nm", "bbox": [-129.3, 45.9, -123.7, 48.75], "maxz": 10},
+        {"label": "Region", "bbox": [-125.9, 45.9, -123.7, 48.75], "maxz": 12},
+        {"label": "Inshore", "bbox": [-124.9, 45.9, -123.7, 48.75], "maxz": 13},
+        {"label": "Columbia River entrance and Astoria", "bbox": [-124.12, 46.15, -123.76, 46.3], "maxz": 16},
+        {"label": "Willapa Bay entrance", "bbox": [-124.12, 46.62, -123.92, 46.75], "maxz": 16},
+        {"label": "Grays Harbor", "bbox": [-124.2, 46.88, -123.8, 47.02], "maxz": 16},
+        {"label": "La Push", "bbox": [-124.66, 47.89, -124.6, 47.93], "maxz": 16}
+      ]
+    },
+    {
+      "name": "oregon-coast",
+      "title": "Oregon coast and the lower Columbia River",
+      "minz": 3,
+      "areas": [
+        {"label": "Offshore, to about 200 nm", "bbox": [-129.8, 41.9, -123.6, 46.35], "maxz": 10},
+        {"label": "Region", "bbox": [-126.0, 41.9, -123.6, 46.35], "maxz": 12},
+        {"label": "Coast, Columbia River to Cascade Head", "bbox": [-124.15, 45.0, -123.85, 46.35], "maxz": 14},
+        {"label": "Coast, Cape Lookout to Coos Bay", "bbox": [-124.4, 43.3, -123.95, 45.0], "maxz": 14},
+        {"label": "Coast, Coos Bay to California", "bbox": [-124.7, 41.9, -124.1, 43.4], "maxz": 14},
+        {"label": "Lower Columbia River to Portland", "bbox": [-123.95, 45.5, -122.6, 46.3], "maxz": 14},
+        {"label": "Tillamook Bay entrance", "bbox": [-123.98, 45.53, -123.9, 45.58], "maxz": 16},
+        {"label": "Yaquina Bay, Newport", "bbox": [-124.1, 44.6, -124.02, 44.64], "maxz": 16},
+        {"label": "Siuslaw River, Florence", "bbox": [-124.14, 43.95, -124.08, 44.03], "maxz": 16},
+        {"label": "Umpqua River entrance", "bbox": [-124.22, 43.65, -124.15, 43.7], "maxz": 16},
+        {"label": "Coos Bay", "bbox": [-124.35, 43.33, -124.18, 43.44], "maxz": 16},
+        {"label": "Chetco River, Brookings", "bbox": [-124.3, 42.03, -124.25, 42.06], "maxz": 16},
+        {"label": "Portland and Vancouver", "bbox": [-122.82, 45.5, -122.64, 45.65], "maxz": 16}
+      ]
+    },
+    {
+      "name": "northern-california",
+      "title": "Northern California, Oregon to Bodega Bay",
+      "minz": 3,
+      "areas": [
+        {"label": "Offshore, to about 200 nm", "bbox": [-128.9, 38.25, -122.8, 42.05], "maxz": 10},
+        {"label": "Region", "bbox": [-126.0, 38.25, -122.8, 42.05], "maxz": 12},
+        {"label": "Coast, Oregon to Humboldt Bay", "bbox": [-124.45, 40.9, -124.0, 42.05], "maxz": 14},
+        {"label": "Coast, Humboldt Bay and Cape Mendocino", "bbox": [-124.55, 40.0, -124.0, 40.9], "maxz": 14},
+        {"label": "Coast, Shelter Cove to Point Arena", "bbox": [-124.1, 38.9, -123.6, 40.0], "maxz": 14},
+        {"label": "Coast, Point Arena to Bodega Bay", "bbox": [-123.8, 38.25, -122.9, 38.9], "maxz": 14},
+        {"label": "Crescent City", "bbox": [-124.22, 41.73, -124.17, 41.76], "maxz": 16},
+        {"label": "Humboldt Bay, Eureka", "bbox": [-124.25, 40.72, -124.12, 40.82], "maxz": 16},
+        {"label": "Noyo River, Fort Bragg", "bbox": [-123.82, 39.42, -123.79, 39.44], "maxz": 16},
+        {"label": "Bodega Bay", "bbox": [-123.07, 38.3, -123.03, 38.34], "maxz": 16}
+      ]
+    },
+    {
+      "name": "san-francisco-bay",
+      "title": "San Francisco Bay to the Farallon Islands",
+      "minz": 3,
+      "areas": [
+        {"label": "Region", "bbox": [-123.4, 37.2, -121.6, 38.35], "maxz": 13},
+        {"label": "San Francisco, San Pablo and Suisun Bays", "bbox": [-122.55, 37.42, -121.95, 38.15], "maxz": 15},
+        {"label": "Golden Gate and San Francisco waterfront", "bbox": [-122.52, 37.77, -122.36, 37.84], "maxz": 16},
+        {"label": "Oakland", "bbox": [-122.34, 37.78, -122.25, 37.82], "maxz": 16},
+        {"label": "Richmond", "bbox": [-122.42, 37.89, -122.33, 37.94], "maxz": 16},
+        {"label": "Mare Island Strait and Vallejo", "bbox": [-122.3, 38.06, -122.22, 38.13], "maxz": 16},
+        {"label": "Carquinez Strait", "bbox": [-122.3, 38.02, -122.12, 38.07], "maxz": 16},
+        {"label": "Redwood City", "bbox": [-122.24, 37.49, -122.18, 37.54], "maxz": 16},
+        {"label": "Half Moon Bay", "bbox": [-122.5, 37.48, -122.45, 37.51], "maxz": 16}
+      ]
+    },
+    {
+      "name": "central-california",
+      "title": "Central California, Half Moon Bay to Point Conception",
+      "minz": 3,
+      "areas": [
+        {"label": "Offshore, to about 200 nm", "bbox": [-126.1, 34.4, -120.3, 37.3], "maxz": 10},
+        {"label": "Region", "bbox": [-123.8, 34.4, -120.3, 37.3], "maxz": 12},
+        {"label": "Coast, Pescadero to Monterey Bay", "bbox": [-122.45, 36.5, -121.75, 37.3], "maxz": 14},
+        {"label": "Coast, Big Sur", "bbox": [-122.05, 35.6, -121.2, 36.5], "maxz": 14},
+        {"label": "Coast, Piedras Blancas to Point Sal", "bbox": [-121.3, 34.95, -120.6, 35.6], "maxz": 14},
+        {"label": "Coast, Point Sal to Point Conception", "bbox": [-120.75, 34.4, -120.3, 35.0], "maxz": 14},
+        {"label": "Santa Cruz", "bbox": [-122.03, 36.95, -121.99, 36.97], "maxz": 16},
+        {"label": "Moss Landing", "bbox": [-121.8, 36.79, -121.78, 36.82], "maxz": 16},
+        {"label": "Monterey", "bbox": [-121.9, 36.59, -121.87, 36.62], "maxz": 16},
+        {"label": "Morro Bay", "bbox": [-120.88, 35.33, -120.84, 35.38], "maxz": 16},
+        {"label": "Port San Luis", "bbox": [-120.77, 35.15, -120.73, 35.18], "maxz": 16}
+      ]
+    },
+    {
+      "name": "southern-california",
+      "title": "Southern California, Point Conception to Mexico",
+      "minz": 3,
+      "areas": [
+        {"label": "Offshore, to about 200 nm", "bbox": [-124.5, 30.5, -117.0, 34.65], "maxz": 10},
+        {"label": "Region and the Channel Islands", "bbox": [-121.2, 32.4, -117.0, 34.65], "maxz": 12},
+        {"label": "Santa Barbara Channel", "bbox": [-120.6, 33.88, -119.0, 34.5], "maxz": 14},
+        {"label": "Point Mugu to Newport Beach", "bbox": [-119.1, 33.55, -117.85, 34.1], "maxz": 14},
+        {"label": "Newport Beach to Mexico", "bbox": [-117.95, 32.5, -117.1, 33.65], "maxz": 14},
+        {"label": "Santa Barbara", "bbox": [-119.7, 34.39, -119.67, 34.41], "maxz": 16},
+        {"label": "Ventura, Channel Islands Harbor and Port Hueneme", "bbox": [-119.29, 34.14, -119.19, 34.25], "maxz": 16},
+        {"label": "Marina del Rey", "bbox": [-118.48, 33.95, -118.43, 33.99], "maxz": 16},
+        {"label": "Los Angeles and Long Beach", "bbox": [-118.3, 33.7, -118.12, 33.78], "maxz": 16},
+        {"label": "Avalon, Santa Catalina", "bbox": [-118.34, 33.33, -118.31, 33.35], "maxz": 16},
+        {"label": "Newport Beach", "bbox": [-117.93, 33.59, -117.86, 33.62], "maxz": 16},
+        {"label": "Dana Point", "bbox": [-117.71, 33.45, -117.68, 33.47], "maxz": 16},
+        {"label": "Oceanside", "bbox": [-117.4, 33.19, -117.38, 33.22], "maxz": 16},
+        {"label": "Mission Bay", "bbox": [-117.26, 32.75, -117.2, 32.79], "maxz": 16},
+        {"label": "San Diego Bay", "bbox": [-117.25, 32.6, -117.1, 32.73], "maxz": 16}
+      ]
+    },
+    {
+      "name": "southeast-alaska",
+      "title": "Southeast Alaska",
+      "minz": 3,
+      "areas": [
+        {"label": "Region", "bbox": [-137.8, 53.9, -129.8, 59.8], "maxz": 12},
+        {"label": "Tongass Narrows", "bbox": [-131.8, 55.3, -131.55, 55.45], "maxz": 14},
+        {"label": "Wrangell Narrows", "bbox": [-133.0, 56.55, -132.85, 56.83], "maxz": 15},
+        {"label": "Gastineau Channel", "bbox": [-134.6, 58.2, -134.3, 58.33], "maxz": 14},
+        {"label": "Ketchikan", "bbox": [-131.72, 55.32, -131.6, 55.38], "maxz": 16},
+        {"label": "Wrangell", "bbox": [-132.4, 56.45, -132.36, 56.48], "maxz": 16},
+        {"label": "Petersburg", "bbox": [-133.0, 56.79, -132.92, 56.83], "maxz": 16},
+        {"label": "Juneau", "bbox": [-134.45, 58.27, -134.38, 58.31], "maxz": 16},
+        {"label": "Sitka", "bbox": [-135.4, 57.03, -135.3, 57.07], "maxz": 16},
+        {"label": "Haines", "bbox": [-135.5, 59.2, -135.4, 59.26], "maxz": 16},
+        {"label": "Skagway", "bbox": [-135.35, 59.43, -135.29, 59.47], "maxz": 16}
+      ]
+    }
+  ]
+}
