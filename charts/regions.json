@@ -1,5 +1,5 @@
 {
-  "about": "Chart packs built each month from NOAA's Chart Display Service MBTiles. Each area is west, south, east, north in degrees and the deepest zoom kept there: the region light, the straits and sounds deeper, harbours deepest. Zoom 12 shows about 10 km across a phone screen, 14 about 2.5 km, 16 about 600 m.",
+  "about": "Chart packs built from NOAA's Chart Display Service MBTiles (checked each month, built when NOAA's files change). Each area is west, south, east, north in degrees and the deepest zoom kept there: the region light, the straits and sounds deeper, harbours deepest. Zoom 12 shows about 10 km across a phone screen, 14 about 2.5 km, 16 about 600 m.",
   "regions": [
     {
       "name": "juan-de-fuca-puget-sound",

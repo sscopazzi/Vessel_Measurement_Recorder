@@ -10,7 +10,7 @@ NOAA publishes one MBTiles file per region of the coast (https://distribution.ch
 updated weekly), and doesn't publish which file covers what. This script reads each file's coverage from its
 first 64 KB (the MBTiles metadata sits at the front), downloads only the files that cover a pack, and builds
 the pack from them. GitHub runs it each month (.github/workflows/charts.yml) and publishes the packs as a
-release; it runs the same way on a laptop.
+release when something has changed; it runs the same way on a laptop.
 
 Writes <out>/<name>.vmrchart for each pack and <out>/packs.json: what was built, from which NOAA files, and a
 fingerprint of what it was built from (each NOAA file's size and Last-Modified, regions.json and the pack
