@@ -14,11 +14,11 @@ release when something has changed; it runs the same way on a laptop.
 
 Writes <out>/<name>.vmrchart for each pack and <out>/packs.json: what was built, from which NOAA files, and a
 fingerprint of what it was built from (each NOAA file's size and Last-Modified, regions.json and the pack
-tools). With --previous (the last release's packs.json), when the fingerprint is the same nothing is
+tools, Leaflet included). With --previous (the last release's packs.json), when the fingerprint is the same nothing is
 downloaded or built: <out>/UNCHANGED is written instead and the workflow publishes nothing."""
 import argparse, glob, hashlib, json, os, sqlite3, sys, time, urllib.request, email.utils, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_vmrchart import build, EXT
+from make_vmrchart import build, EXT, LEAFLET
 
 CATALOG = "https://raw.githubusercontent.com/chartcatalogs/catalogs/master/NOAA_MBTiles_Catalog.xml"
 BASE = "https://distribution.charts.noaa.gov/ncds/mbtiles/"
@@ -155,7 +155,7 @@ def main():
         # the most detailed file first: where two files both have chart on a tile, the deeper-zoom, smaller file wins
         use.sort(key=lambda s: (-files[s]["maxz"], (files[s]["bounds"][2] - files[s]["bounds"][0]) * (files[s]["bounds"][3] - files[s]["bounds"][1])))
         uses[reg["name"]] = use
-    fp = fingerprint(regions, uses, files, [os.path.join(here, "make_vmrchart.py"), __file__])
+    fp = fingerprint(regions, uses, files, [os.path.join(here, "make_vmrchart.py"), __file__] + LEAFLET)
     if a.previous and not a.force and not a.only and os.path.exists(a.previous):
         try: prev = json.load(open(a.previous)).get("fingerprint")
         except Exception: prev = None

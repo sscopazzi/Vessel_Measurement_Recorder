@@ -8,11 +8,59 @@ class Dash {
       vc: 2, vct: '', condt: '', tow: 0, towt: '', towl: 0, bt: 0, btt: '', blu: 0, btu: 0, bl: null, bw: null, bdf: null, bdm: null, bda: null, bton: null, voy: 'DEMO-01' };
     this.ext = { en: 0b101111, addr: [0x77, 0x44, 0x20, 0x48, 0x49], src: [0, 1, 0, 1, 0] };
     this.xb = [1, 2, 3, 4, 5]; this.xbs = 10; this.lcdcol = 3; this.mix = [255, 96, 0]; this.dark = 0;
+    this.charts = []; this.chRev = 1;            // chart packs loaded in the demo (kept in this browser tab only)
+    // routes (GPX text by name), one active: a coastal route the simulated ship is on, active from the start
+    const W = [['Los Angeles approach', 33.70, -118.27], ['Point Vicente', 33.70, -118.45], ['Anacapa Passage', 34.05, -119.40], ['Point Conception', 34.32, -120.50],
+      ['Point Arguello', 34.62, -120.80], ['Piedras Blancas', 35.62, -121.40], ['Point Sur', 36.28, -122.03], ['Monterey Bay', 36.75, -122.25], ['San Francisco approach', 37.76, -122.65]];
+    this.routes = { 'LA-to-SF-coastal': '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="VMR" xmlns="http://www.topografix.com/GPX/1/1"><rte><name>LA to SF coastal</name>' +
+      W.map(([n, la, lo]) => '<rtept lat="' + la + '" lon="' + lo + '"><name>' + n + '</name></rtept>').join('') + '</rte></gpx>\n' };
+    this.rtAct = 'LA-to-SF-coastal'; this.rtRev = 1;
+  }
+  // ---- chart packs (.vmrchart): read as the VMR reads them (CHARTS in VMR.ino)
+  chartParse(buf, f) {
+    if (buf.byteLength < 64) return null;
+    const v = new DataView(buf), u32 = o => v.getUint32(o, true), f32 = o => v.getFloat32(o, true);
+    const h = { tiles: u32(8), idx: u32(12), mo: u32(16), ml: u32(20), w: f32(24), s: f32(28), e: f32(32), n: f32(36),
+      minz: v.getUint8(40), maxz: v.getUint8(41), px: v.getUint16(42, true), built: u32(44), chart: u32(48), data: u32(52), flen: u32(56), lib: u32(60) };
+    if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'VMRC' || v.getUint16(4, true) !== 1 || v.getUint16(6, true) !== 64 || h.flen !== buf.byteLength
+      || !h.tiles || h.idx + 16 * h.tiles > h.data || h.minz > h.maxz) return null;
+    const L = h.lib, lf = L >= h.data && L + 16 <= h.flen && String.fromCharCode(...new Uint8Array(buf, L, 4)) === 'VMRL'
+      && u32(L + 4) > 0 && u32(L + 8) > 0 && L + 16 + u32(L + 4) + u32(L + 8) <= h.flen;   // it carries Leaflet
+    let t = f; try { t = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, h.mo, h.ml))).title || f; } catch (e) {}
+    return { f, t, h, v, buf, lf };
+  }
+  chartTile(z, x, y) {
+    const lon = (x, z) => x / 2 ** z * 360 - 180, lat = (y, z) => 180 / Math.PI * Math.atan(Math.sinh(Math.PI * (1 - 2 * y / 2 ** z)));
+    for (let up = 0; up <= z; up++) {
+      const zz = z - up, xx = x >> up, yy = y >> up, w = lon(xx, zz), e = lon(xx + 1, zz), n = lat(yy, zz), s = lat(yy + 1, zz);
+      const key = BigInt(zz) << 48n | BigInt(xx) << 24n | BigInt(yy);
+      for (const p of this.charts) {
+        const h = p.h; if (zz < h.minz || zz > h.maxz || e <= h.w || w >= h.e || n <= h.s || s >= h.n) continue;
+        let a = 0, b = h.tiles - 1;
+        while (a <= b) { const m = (a + b) >> 1, k = p.v.getBigUint64(h.idx + 16 * m, true);
+          if (k === key) { const off = p.v.getUint32(h.idx + 16 * m + 8, true), len = p.v.getUint32(h.idx + 16 * m + 12, true), d = new Uint8Array(p.buf, off, len);
+            const ty = d[0] === 0x52 && d[8] === 0x57 ? 'image/webp' : d[0] === 0xFF ? 'image/jpeg' : 'image/png';
+            return { status: 200, type: ty, body: d, headers: { 'X-Tile-Z': String(zz) } }; }
+          if (k < key) a = m + 1; else b = m - 1; }
+      }
+    }
+    return { status: 404, type: 'text/plain', body: 'no chart here' };
+  }
+  async chartUp(fd) {
+    const E = (t, c = 500) => ({ status: c, type: 'application/json', body: JSON.stringify({ error: t }) }), file = fd.get('f');
+    if (this.sim.V.logging) return E('Stop recording first: charts load only while not recording');
+    if (!file || !/^[A-Za-z0-9_-]{1,39}\.vmrchart$/.test(file.name)) return E('Not a .vmrchart file, or its name has spaces or symbols');
+    const f = file.name.replace(/\.vmrchart$/, ''), p = this.chartParse(await file.arrayBuffer(), f);
+    if (!p) return E('Not a whole VMR chart pack: download it again');
+    this.charts = this.charts.filter(c => c.f !== f).concat(p).sort((a, b) => b.h.maxz - a.h.maxz || (a.h.e - a.h.w) * (a.h.n - a.h.s) - (b.h.e - b.h.w) * (b.h.n - b.h.s));
+    this.chRev++; this.sim.say && this.sim.say('Charts: ' + f + ' loaded');
+    return { status: 200, type: 'application/json', body: JSON.stringify({ saved: f }) };
   }
   // a fetch from the page: { status, type, body } (or null = no answer: the hotspot is off, the VMR is off or restarting)
   handle(method, url, body) {
     const s = this.sim, V = s.V, u = new URL(url, 'http://vmr.local/'), path = u.pathname, q = Object.fromEntries(u.searchParams);
-    const f = body ? Object.fromEntries(new URLSearchParams(body)) : {};
+    const f = typeof body === 'string' && body ? Object.fromEntries(new URLSearchParams(body)) : {};
+    const form = body && typeof body === 'object' && typeof body.get === 'function';   // a FormData (from the page's frame: instanceof can't tell)
     if (!s.power || s.dead || s.chargeOff || s.bootT || V.wifiOffByBtn || V.loggerMode || (s.wifiDownUntil && s.t < s.wifiDownUntil)) return null;
     const J = o => ({ status: 200, type: 'application/json', body: JSON.stringify(o) }), T = (t, c = 200) => ({ status: c, type: 'text/plain', body: t });
     if (method === 'GET') {
@@ -26,7 +74,15 @@ class Dash {
       if (path === '/devices') return J({ devs: s.devs.map(d => ({ mac: d.mac.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(':'), name: d.name, kind: d.kind, on: d.on, me: !!d.me, onU: d.onU || s.unix - 300, onAgo: 300, offU: 0, offAgo: 0 })) });
       if (path === '/dlstat') return J({ st: 0, seq: 0, n: '', got: 0, tot: 0, ms: 0, sd: 0, net: 0, err: '' });
       if (path === '/marks.csv') return { status: 200, type: 'text/csv', body: this.marksCsv() };
+      if (path === '/track') { this.trkTick(); const since = +(q.since || 0), cut = s.unix - 259200;
+        return T('t,lat_e7,lon_e7\n' + this.trk.filter(p => p.t > since && p.t >= cut).map(p => p.t + ',' + Math.round(p.la * 1e7) + ',' + Math.round(p.lo * 1e7)).join('\n') + '\n'); }
       if (path === '/slm') return J(this.slmJson());
+      if (path === '/charts') return J({ sd: true, rec: !!V.logging, rev: this.chRev, free: 31800000000 - this.charts.reduce((a, c) => a + c.h.flen, 0),
+        packs: this.charts.map(c => ({ f: c.f, t: c.t, b: [c.h.w, c.h.s, c.h.e, c.h.n], z: [c.h.minz, c.h.maxz], px: c.h.px, n: c.h.tiles, size: c.h.flen, built: c.h.built, chart: c.h.chart, lf: c.lf })) });
+      if (path === '/chart') return this.chartTile(+q.z, +q.x, +q.y);
+      if (path === '/routes') return J({ act: this.rtAct, rev: this.rtRev, sd: true, routes: Object.keys(this.routes).sort().map(n => ({ n, size: this.routes[n].length })) });
+      if (path === '/route') return this.routes[q.n] != null ? { status: 200, type: 'application/gpx+xml', body: this.routes[q.n] } : { status: 404, type: 'text/plain', body: 'no such route' };
+      if (path === '/lf.js' || path === '/lf.css') return null;   // the demo's Leaflet comes from unpkg
       if (path === '/files') {
         if (q.dir === 'p' || q.dir === 'a') return J({ sd: true, total: 31900000000, used: 5000000, files: [] });
         const fl = (V.logging ? [{ n: s.logName, s: s.bytes, a: false }] : []).concat(s.files.map(x => ({ n: x.n, s: x.s, a: false })));
@@ -54,6 +110,13 @@ class Dash {
     if (path === '/marknote') { const m = s.marks[+f.n - 1]; if (m) m.note = (f.note || '').slice(0, 80); s.mkRev++; return J({ saved: true }); }
     if (path === '/markdel') { s.marks.pop(); s.syncMarks(); return J({ saved: true }); }
     if (path === '/markclear') { s.marks = []; s.syncMarks(); return J({ ok: true }); }
+    if (path === '/trackclear') { this.trkTick(); this.trk = []; return J({ ok: true }); }
+    if (path === '/chartup') return form ? this.chartUp(body) : J({ error: 'No file' });
+    if (path === '/routeup') { const file = form && body.get('f'); if (!file || !/^[A-Za-z0-9_-]{1,39}\.gpx$/.test(file.name)) return { status: 500, type: 'application/json', body: JSON.stringify({ error: 'Bad route name' }) };
+      return file.text().then(t => { const n = file.name.replace(/\.gpx$/, ''); this.routes[n] = t; this.rtRev++; return J({ saved: n }); }); }
+    if (path === '/routedel') { delete this.routes[f.n]; if (this.rtAct === f.n) this.rtAct = ''; this.rtRev++; return J({ ok: true }); }
+    if (path === '/routeact') { if (f.n && this.routes[f.n] == null) return { status: 500, type: 'application/json', body: JSON.stringify({ error: 'No such route' }) }; this.rtAct = f.n || ''; this.rtRev++; return J({ ok: true }); }
+    if (path === '/chartdel') { this.charts = this.charts.filter(c => c.f !== f.f); this.chRev++; return J({ ok: true }); }
     if (path === '/event') { s.logEv(f.note || ''); return J({ n: s.logEvs.length }); }
     if (path === '/gps') { if (f.action === 'off' || f.action === 'on') { V.gpsOff = f.action === 'off' ? 1 : 0; s.say(V.gpsOff ? 'GPS off (standby)' : 'GPS on'); } return J({ ok: true }); }
     if (path === '/zero') {
@@ -133,7 +196,8 @@ class Dash {
     const s = this.sim, S = s.slm, n = this.n.bind(this), q = s.prof(Math.max(0, S.depth));
     const lv = S.iwb ? { p: n(S.depth * 1.0057, 3), d: n(S.depth, 2), t: n(S.depth > 0.3 ? q.t : s.wx.t + 0.4, 3), ec: S.depth > 0.3 ? Math.round(q.sp * 1300 + q.t * 900) : null, sp: S.depth > 0.3 ? n(q.sp, 3) : null, rho: S.depth > 0.3 ? n(q.rho, 3) : null } : null;
     const nk = { en: S.nkOn, armed: S.armed, wtb: S.armed, on: S.nkOn, hw: S.armed ? 15 : 0, rdy: S.armed && S.rdy && S.pend < 0, held: S.btnDown.reduce((a, d, i) => a | (d ? 1 << i : 0), 0), pend: S.pend, cast: S.open,
-                 cap: S.armed ? n(S.cap, 2) : null, vin: S.armed ? 12.08 : null, rin: S.rdy ? 0 : n(Math.max(0, 1.4 - (s.t - (S.capT || 0)) / 1000), 1), rch: 0.72, gap: 0.5, spd: 0.2,
+                 cap: S.armed && S.iwb ? n(S.cap, 2) : null, vin: S.armed && S.iwb ? 12.08 : null,   // the IWB reports them once it is up
+                  rin: S.rdy || S.capT === undefined ? 0 : n(s.capNow().inS, 1), rch: 0.72, gap: 0.5, spd: 0.2,
                  b: S.b.map(b => [b.st, b.src, isNaN(b.plan) ? null : b.plan, n(b.z, 2), n(b.t, 3), n(b.sp, 3), n(b.rho, 3), b.u || null]),
                  ev: S.ev.filter(e => /Bottle/.test(e.t)).slice(0, 10) };
     return { slm: { on: true, armed: S.armed, dis: false, paired: true, pairing: false, wtb: S.armed, state: S.state, manual: false, toDraft: false, idle: true, eth: S.eth, iwb: S.iwb, cast: S.open ? S.castN : 0, castN: S.castN,
@@ -154,7 +218,27 @@ class Dash {
     });
     return o;
   }
+  // the track (the firmware's TRACK section): a point every 30 s while moving, 5 min while still. The demo starts with
+  // 72 h behind the ship (made up: its course run backwards with slow turns, a 2-h station stop 30 h ago, and no fix
+  // for 25 min 3 h ago and for 1 h 50 h ago, which the map shows as gaps)
+  trkTick() {
+    const s = this.sim;
+    if (!this.trk) { this.trk = []; const D2R = Math.PI / 180, v = Math.max(s.p.sog || 0, 6) * 0.5144, c0 = (s.p.cog || 0) * D2R, H = 3600;
+      let la = s.lat, lo = s.lon, t = s.unix, still = 0;
+      while (t > s.unix - 72 * H) {
+        const ago = s.unix - t, stop = ago > 30 * H && ago < 32 * H, dt = stop ? 300 : 30;
+        if (!stop) { const c = c0 + 0.35 * Math.sin(ago / 9000) + 0.6 * Math.sin(ago / 61000);
+          la -= v * dt * Math.cos(c) / 111320; lo -= v * dt * Math.sin(c) / (111320 * Math.cos(la * D2R)); }
+        t -= dt;
+        const noFix = (ago > 3 * H - 1500 && ago < 3 * H) || (ago > 50 * H && ago < 51 * H);
+        if (!noFix) this.trk.unshift({ t, la, lo });
+      }
+      this.trkLast = s.unix; }
+    const last = this.trk[this.trk.length - 1], dt = s.unix - (last ? last.t : 0);
+    if (s.V['gps.gpsFix'] && (dt >= 300 || dt >= 30 && (s.p.sog || 0) > 0.03)) this.trk.push({ t: s.unix, la: s.lat, lo: s.lon });
+  }
   data(sky) {
+    this.trkTick();
     const s = this.sim, V = s.V, p = s.p, n = this.n.bind(this), gpsOn = !V.gpsOff, w = s.wxNow || s.wxAt(0), win = s.win || { rM: 0, rm: 0, pM: 0, pm: 0, yM: 0 }, A = s.allMax;
     const onUsb = s.usb, rate = V.battRate, full = onUsb && s.batt >= 99.5, hLeft = full ? null : onUsb ? (100 - s.batt) / 8 : s.batt / -rate;
     const bSt = full ? 2 : onUsb ? 1 : 3;                     // battEst: 1 charging, 2 full, 3 on the battery
@@ -214,6 +298,7 @@ class Dash {
     d.slm = this.slmJson().slm; d.bType = 0; d.bChem = 0; d.bA = null;
     d.heap = { free: 32800, big: 24500, min: 25600, pfree: 1890000, pbig: 1830000 };
     d.web = { dB: 11, dS: 84, dKB: 6420, dBr: 38, dSr: 910, dBb: 80, dSb: 3120, pS: 2140, pSb: 6050, pN: 1, wR: 15, wB: 120, dCut: 0, pCut: 0, pMem: 0 };
+    d.trkN = this.trk.length; d.chRev = this.chRev; d.rtAct = this.rtAct; d.rtRev = this.rtRev;
     return d;
   }
   scrAv() { let m = 0; for (let i = 0; i < 23; i++) if (this.sim.W.X.vmr_screen_avail(i)) m |= 1 << i; return m >>> 0; }

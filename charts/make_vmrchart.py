@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Makes a VMR chart pack (.vmrchart) from NOAA Chart Display Service MBTiles, for the VMR's Map card.
+"""Makes a VMR chart pack (.vmrchart) from NOAA Chart Display Service MBTiles, for the VMR's Chart card.
 
     python3 make_vmrchart.py --region regions.json:juan-de-fuca-puget --out packs/  ncds_20c.mbtiles
     python3 make_vmrchart.py --name test --bbox=-124.8,47.0,-122.1,48.8 --maxz 13 --out packs/  ncds_20c.mbtiles
@@ -10,7 +10,8 @@ the whole region light (zoom 12 or 13), the straits and sounds at 14, harbours a
 across two NOAA files takes both; where both have a tile, the first file with chart on it wins. Tiles with
 no chart on them (fully transparent) are left out, so the map shows nothing there rather than a blank.
 Each tile is kept as the smaller of NOAA's own image and a lossless WebP of it; tiles with the same bytes
-(open water, plain land) are stored once.
+(open water, plain land) are stored once. Each pack also carries Leaflet (leaflet/, the map code the Chart card
+draws with), so a VMR with a pack on its card shows the chart without internet.
 
 The .vmrchart file (little-endian):
   header, 64 bytes:
@@ -19,16 +20,26 @@ The .vmrchart file (little-endian):
     24 f32 west, south, east, north (degrees)
     40 u8 min zoom      41 u8 max zoom        42 u16 tile size (pixels)
     44 u32 built (UTC)  48 u32 chart date (UTC: the newest NOAA file used)
-    52 u32 data offset  56 u32 file length    60 u32 0
+    52 u32 data offset  56 u32 file length    60 u32 library offset (0: none)
   metadata: UTF-8 JSON (name, title, source, attribution, areas)
   index: one 16-byte entry per tile, sorted by key: u64 key = zoom << 48 | x << 24 | y (XYZ, y down from
          the north), u32 offset, u32 length
   data: the tile images (PNG, JPEG or WebP; the VMR tells them apart by their first bytes)
+  library: "VMRL", u32 Leaflet JS length, u32 Leaflet CSS length, u32 0, then the two, each gzipped
 Not for navigation: NOAA ENC charts shown as pictures, for situational awareness."""
-import argparse, json, math, os, sqlite3, struct, sys, time, io, hashlib
+import argparse, json, math, os, sqlite3, struct, sys, time, io, hashlib, gzip, re
 
 MAGIC, VERSION, HDR, EXT = b"VMRC", 1, 64, ".vmrchart"
 HFMT = "<4sHHIIIIffffBBHIIIII"
+LEAFLET = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "leaflet", f) for f in ("leaflet.js", "leaflet.css")]
+
+
+def library():
+    """Leaflet's version and the library block: "VMRL", the JS and CSS lengths, 0, then each gzipped."""
+    js, css = (open(p, "rb").read() for p in LEAFLET)
+    v = re.search(rb"Leaflet (\d+\.\d+\.\d+)", js[:400])
+    zj, zc = (gzip.compress(b, compresslevel=9, mtime=0) for b in (js, css))
+    return (v.group(1).decode() if v else "?"), b"VMRL" + struct.pack("<III", len(zj), len(zc), 0) + zj + zc
 
 
 def tile_range(w, s, e, n, z):
@@ -120,23 +131,25 @@ def build(name, title, areas, sources, out_dir, webp=True, minz=3, quiet=False):
     E = max(a["bbox"][2] for a in areas); N = max(a["bbox"][3] for a in areas)
     zs = [k >> 48 for k, _ in index]
     built, chart = int(time.time()), mbtiles_date(sources)
-    meta = json.dumps({"name": name, "title": title,
+    lfv, lib = library()
+    meta = json.dumps({"name": name, "title": title, "leaflet": lfv,
                        "source": "NOAA Chart Display Service (ENC): " + ", ".join(os.path.basename(p) for p in sources),
                        "attribution": "NOAA ENC charts: not for navigation", "areas": areas}, separators=(",", ":")).encode()
     meta_off = HDR; idx_off = meta_off + len(meta); idx_off += (-idx_off) % 16
     data_off = idx_off + 16 * len(index)
     offs, o = [], data_off
     for b in blobs: offs.append(o); o += len(b)
-    flen = o
+    lib_off = o; flen = o + len(lib)
     if flen >= 1 << 32: sys.exit("%s: over 4 GB, too big for the microSD card's FAT32: use fewer or smaller areas" % name)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, name + EXT)
     with open(path + ".part", "wb") as f:
         f.write(struct.pack(HFMT, MAGIC, VERSION, HDR, len(index), idx_off, meta_off, len(meta),
-                            W, S, E, N, min(zs), max(zs), px or 256, built, chart, data_off, flen, 0))
+                            W, S, E, N, min(zs), max(zs), px or 256, built, chart, data_off, flen, lib_off))
         f.write(meta); f.write(b"\0" * (idx_off - meta_off - len(meta)))
         for key, bn in index: f.write(struct.pack("<QII", key, offs[bn], len(blobs[bn])))
         for b in blobs: f.write(b)
+        f.write(lib)
     os.replace(path + ".part", path)
     if not quiet:
         print("%s: %d tiles (%d different, %d empty left out), zoom %d-%d, %.1f MB (NOAA's images were %.1f MB) -> %s"
@@ -145,11 +158,16 @@ def build(name, title, areas, sources, out_dir, webp=True, minz=3, quiet=False):
 
 
 def read_pack(path):
-    """The header and metadata of a pack, and a lookup for one tile (used by the tests)."""
+    """The header and metadata of a pack, and a lookup for one tile (used by the tests). "leaflet": its Leaflet JS and
+    CSS (gzipped), or None."""
     f = open(path, "rb"); h = struct.unpack(HFMT, f.read(HDR))
     if h[0] != MAGIC: raise ValueError("not a VMR chart pack")
     n, idx, mo, ml = h[3], h[4], h[5], h[6]
     f.seek(mo); meta = json.loads(f.read(ml))
+    lf = None
+    if h[18]:
+        f.seek(h[18]); m, nj, nc, _ = struct.unpack("<4sIII", f.read(16))
+        if m == b"VMRL": lf = (f.read(nj), f.read(nc))
     def tile(z, x, y):
         key = (z << 48) | (x << 24) | y; lo, hi = 0, n - 1
         while lo <= hi:
@@ -159,7 +177,7 @@ def read_pack(path):
             else: hi = mid - 1
         return None
     return {"tiles": n, "bounds": h[7:11], "minz": h[11], "maxz": h[12], "px": h[13], "built": h[14],
-            "chart": h[15], "len": h[17], "meta": meta}, tile
+            "chart": h[15], "len": h[17], "meta": meta, "leaflet": lf}, tile
 
 
 if __name__ == "__main__":
