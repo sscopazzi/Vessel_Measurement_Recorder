@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // VMR demo: more declarations (as VMR.ino)
 constexpr float R2D = 57.2957795f, D2R = 0.0174532925f;
 #define BALL_G        600.0f
@@ -50,3 +52,13 @@ uint32_t rowGaps = 0, rowGapMax = 0, rowGapUnix = 0, rowPrevMs = 0;
 #define tUnit() (unitC() ? 'C' : 'F')
 #define lShow(m) (unitM() ? (float)(m) : (float)(m) * M_TO_FT)
 #define lUnit() (unitM() ? "m" : "ft")
+#define spdU() (P.unitsX & 3)
+#define sShow(kn) (spdU() == 1 ? (float)(kn) * 0.514444f : spdU() == 2 ? (float)(kn) * 1.852f : (float)(kn))
+#define sUnit() (spdU() == 1 ? "m/s" : spdU() == 2 ? "km/h" : "kn")
+#define dShow(nm) ((P.unitsX & 4) ? (float)(nm) * 1.852f : (float)(nm))
+#define dUnit() ((P.unitsX & 4) ? "km" : "nm")
+#define anchorRadNow() ((uint16_t)(P.anchorRadM ? P.anchorRadM : 50))
+#define alRollDeg()    (P.alRoll10 ? P.alRoll10 / 10.0f : 25.0f)
+#define alHsM()        (P.alHsCm ? P.alHsCm / 100.0f : 3.0f)
+#define alWindKn()     (P.alWind10 ? P.alWind10 / 10.0f : 35.0f)
+#define alBattNow()    ((uint8_t)(P.alBattPct ? P.alBattPct : 20))

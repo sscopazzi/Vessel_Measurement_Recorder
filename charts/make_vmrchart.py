@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Makes a VMR chart pack (.vmrchart) from NOAA Chart Display Service MBTiles, for the VMR's Chart card.
 
     python3 make_vmrchart.py --region regions.json:juan-de-fuca-puget --out packs/  ncds_20c.mbtiles

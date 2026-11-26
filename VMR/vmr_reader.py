@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+# SPDX-License-Identifier: MIT
 """
 vmr_reader.py - read Vessel Measurement Recorder (VMR) CSV files into pandas.
 
@@ -29,8 +31,6 @@ What it does for you
   - SeaLabMOS: the iwb_* columns are the WTB's 1-s means, on the
     row after the second they cover and never repeated; iwb_state is on every row while
     SeaLabMOS is on. batt_a (12 V battery, INA260) is written with batt_v.
-  - Older files: pressure_hpa is renamed pressure_mbar (the same unit); gm_m
-    is converted to gm_ft.
 
 Needs pandas. Written for the VMR by Aspect Wave LLC and Claude (Anthropic), 2026.
 """
@@ -45,7 +45,7 @@ import pandas as pd
 __all__ = ["read_vmr", "read_many", "read_marks", "read_meta",
            "events", "fixes", "waves", "slow", "ctd", "summary", "SLOW_COLUMNS", "IWB_COLUMNS", "UNITS"]
 
-# Written together once a second and on change, blank between (older files repeat them on every row)
+# Written together once a second and on change, blank between
 SLOW_COLUMNS = ["batt_v", "batt_pct", "zero_applied", "roll_period_s", "gm_ft",
                 "pressure_mbar", "air_temp_c", "rh_pct", "mag_cal", "box_temp_c", "batt_a", "batt_gauge_pct"]
 # SeaLabMOS: the WTB's 1-s means, on the row after each second, never repeated (not filled)
@@ -54,11 +54,12 @@ IWB_COLUMNS = ["iwb_sal_psu", "iwb_temp_c", "iwb_pres_dbar", "iwb_cpu_c", "iwb_d
 # Filled only on the first row after each new GPS fix
 GPS_COLUMNS = ["gps_lat", "gps_lon", "gps_alt_m", "gps_speed_ms", "gps_speed_kn",
                "gps_angle_deg", "gps_fix", "gps_sats", "gps_hdop", "gps_fix_quality", "gps_age_ms"]
-WAVE_COLUMNS = ["wave_te_s", "wave_tr_s", "wave_tr_src", "wave_te_tr", "wave_flag",
+WAVE_COLUMNS = ["wave_te_s", "wave_tr_s",
                 "heave_hs_m", "heave_tp_s", "roll_tp_s", "heave_hs_mid_m",
-                "baro_hs_m", "baro_hs_mid_m", "baro_tp_s"]          # baro_: from the pressure
+                "baro_hs_m", "baro_hs_mid_m", "baro_tp_s",          # baro_: from the pressure
+                "fused_hs_m", "fused_hs_mid_m", "fused_coh", "baro_gain"]   # fused_: the two together
 WIND_COLUMNS = ["wind_app_deg", "wind_app_kn", "wind_true_deg", "wind_true_kn"]
-TEXT_COLUMNS = ["event_note", "wave_tr_src", "iwb_state"]
+TEXT_COLUMNS = ["event_note", "iwb_state"]
 
 # Units by column (the CSV keeps these whatever the VMR's display units are set to)
 UNITS = {
@@ -73,6 +74,8 @@ UNITS = {
     "wind_app_deg": "deg from, off the bow", "wind_app_kn": "kn", "wind_true_deg": "deg T from",
     "wind_true_kn": "kn", "mag_var_deg": "deg (+ east)", "box_temp_c": "degC (inside the box)",
     "baro_hs_m": "m (heave Hs from the pressure)", "baro_hs_mid_m": "m (the same, at midships)", "baro_tp_s": "s",
+    "fused_hs_m": "m (heave Hs, motion and pressure fused)", "fused_hs_mid_m": "m (the same, at midships)",
+    "fused_coh": "0-1 (coherence of the two, motion-weighted)", "baro_gain": "x (the pressure's height over the motion's, 12 s and shorter)",
     "batt_a": "A (12 V battery: + charging, - drawing)",
     "batt_gauge_pct": "% (the LiPo fuel gauge's own; batt_pct is from the voltage)",
     "iwb_sal_psu": "PSS-78", "iwb_temp_c": "degC (water, TSYS01)", "iwb_pres_dbar": "dbar (sea pressure)",
@@ -81,7 +84,6 @@ UNITS = {
     "iwb_dewpt_c": "degC (IWB tube air: the leak sign)", "iwb_v": "V (supply at the IWB)", "iwb_cast": "cast number (open cast)",
 }
 
-_RENAME = {"pressure_hpa": "pressure_mbar"}   # older files: the same unit
 
 
 def read_meta(path) -> dict:
@@ -118,10 +120,6 @@ def read_vmr(path, fill_slow: bool = True, local_time: bool = True) -> pd.DataFr
     meta = read_meta(path)
     df = pd.read_csv(path, comment="#", low_memory=False,
                      dtype={c: "string" for c in TEXT_COLUMNS + ["event"]})
-    df = df.rename(columns=_RENAME)
-
-    if "gm_m" in df.columns and "gm_ft" not in df.columns:   # older files
-        df["gm_ft"] = pd.to_numeric(df.pop("gm_m"), errors="coerce") / 0.3048
 
     for c in df.columns:                                     # numbers stay numbers
         if c not in TEXT_COLUMNS and c not in ("utc_time", "event"):
@@ -168,7 +166,6 @@ def read_many(paths, **kw) -> pd.DataFrame:
 def read_marks(path) -> pd.DataFrame:
     """Read a location marks file (/location_mark/..._location_marks.csv)."""
     df = pd.read_csv(path, comment="#", dtype={"note": "string", "type": "string"})
-    df = df.rename(columns=_RENAME)
     for c in ("utc_time", "end_utc_time"):
         if c in df.columns:
             df[c] = pd.to_datetime(df[c], utc=True, errors="coerce", format="ISO8601")
@@ -196,8 +193,7 @@ def waves(df: pd.DataFrame) -> pd.DataFrame:
     cols = [c for c in WAVE_COLUMNS if c in df.columns]
     if not cols:
         return df.iloc[0:0]
-    num = [c for c in cols if c != "wave_tr_src"]
-    return df.loc[df[num].notna().any(axis=1), cols]
+    return df.loc[df[cols].notna().any(axis=1), cols]
 
 
 def slow(df: pd.DataFrame, rule: str = "1s") -> pd.DataFrame:

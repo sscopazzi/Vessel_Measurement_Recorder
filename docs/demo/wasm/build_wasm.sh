@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
 # VMR demo: builds vmr.wasm, the firmware's screens, buttons, LEDs, 7-segment and LCD code for the browser.
 # Needs zig (pip install ziglang) and the Arduino libraries Adafruit GFX and Adafruit SH110X.
 # usage: sh build_wasm.sh [Arduino libraries folder]

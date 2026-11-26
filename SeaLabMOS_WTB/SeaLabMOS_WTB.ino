@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-GSW-additional-permission
 // SeaLabMOS WTB (wet-talk board) - the VMR's optional link to the in-water board (IWB)
 // Aspect Wave LLC - Sophie Scopazzi - firmware 1.11
 //
@@ -94,7 +96,7 @@ bool ethUp = false, sdOk = false;
 uint8_t vmrMac[6]; bool paired = false; bool vmrKnown = false;
 uint8_t chan = 1; bool chanLocked = false; uint32_t lastBeaconMs = 0, scanStepMs = 0;
 int64_t utcOffsetMs = 0; bool timeKnown = false; uint8_t timeSrc = 0;
-float shipLat = NAN, shipLon = NAN, draftDeep = NAN;
+float vmrLat = NAN, vmrLon = NAN, draftDeep = NAN;
 BConfig cfg = {DEF_START_M, DEF_START_S, DEF_END_M, DEF_END_S, DEF_BIN_M, DEF_SOAK_S, 0, 0};
 uint8_t state = S_STARTING; bool manual = false; bool disarming = false;
 uint32_t bootMs = 0, readySinceMs = 0;
@@ -156,7 +158,7 @@ void stampName(char* d, size_t n, const char* dir, const char* tail) {
 }
 float depthFrom(float pSea) {                 // TEOS-10, at the VMR's latitude (45 deg until it is known)
   if (isnan(pSea)) return NAN;
-  double lat = isnan(shipLat) ? 45.0 : shipLat;
+  double lat = isnan(vmrLat) ? 45.0 : vmrLat;
   return (float)(-gsw_z_from_p(max(0.0f, pSea), lat, 0, 0));
 }
 static const uint8_t WTB_TAG_X[] = {'W' ^ 0x5A, 'T' ^ 0x5A, 'B' ^ 0x5A, 'V' ^ 0x5A, 'E' ^ 0x5A, 'R' ^ 0x5A};
@@ -463,7 +465,7 @@ void nkOnAck(char** f, int n) {
     uint32_t now = millis();
     R.t = (lastTMs && now - lastTMs < 3000) ? lastT : NAN;
     if (lastCMs && now - lastCMs < 3000) { R.sp = lastSp; R.rho = lastRho; }
-    R.lat = shipLat; R.lon = shipLon;
+    R.lat = vmrLat; R.lon = vmrLon;
     R.capB = n > 5 ? numOrNan(f[5]) : NAN; R.capA = n > 6 ? numOrNan(f[6]) : NAN;
     nkSaveState(); nkBottleFile(i);
     BBottle b = {}; b.bottle = i; b.src = R.src; b.castNum = R.cast; b.utcMs = R.utc; b.depthM = R.depthM; b.pSea = R.pSea;
@@ -651,7 +653,7 @@ void endCast(const char* why) {
   castOpen = false; state = S_PROC;
   if (castF) castF.close();
   if (serialDisplay) Serial.printf("Cast %u closed (%s), %lu samples\n", castNum, why, (unsigned long)csN);
-  BCastDone cd = {}; cd.castNum = castNum; cd.startUtc = castStartUtc; cd.endUtc = nowUtc(); cd.lat = shipLat; cd.lon = shipLon;
+  BCastDone cd = {}; cd.castNum = castNum; cd.startUtc = castStartUtc; cd.endUtc = nowUtc(); cd.lat = vmrLat; cd.lon = vmrLon;
   cd.toDraft = cfg.castToDraft; strncpy(cd.profName, castProfName, sizeof(cd.profName) - 1);
   cd.meanRho = NAN; cd.rangeTop = NAN; cd.rangeBottom = NAN; cd.draftUsed = NAN; cd.maxDepth = NAN;
   // 1. the down cast: from the shallowest point after the soak to the deepest sample
@@ -860,13 +862,13 @@ void handleFrame(const RxF& f) {
   if (h->flags & F_ACKED) { BAck a = {h->seq, 0}; lnkSend(T_ACK, &a, sizeof(a)); }
   switch (h->type) {
     case T_ACK: { const BAck* a = (const BAck*)b; for (int i = 0; i < PEND_N; i++) if (pend[i].used && pend[i].seq == a->seq) pend[i].used = false; } break;
-    case T_SHIP: {
-      const BShip* q = (const BShip*)b;
+    case T_VMR: {
+      const BVmr* q = (const BVmr*)b;
       if (q->utcSrc && q->utcMs > 0) {
         utcOffsetMs = q->utcMs - (int64_t)millis(); timeSrc = q->utcSrc;
         if (!timeKnown) { timeKnown = true; if (iwb && iwb.connected()) { char c[48]; snprintf(c, sizeof(c), "CMD,TIME,%lld", (long long)nowUtc()); iwbSend(c); lastTimeSentMs = millis(); } }
       }
-      shipLat = q->lat; shipLon = q->lon; draftDeep = q->draftDeepM;
+      vmrLat = q->lat; vmrLon = q->lon; draftDeep = q->draftDeepM;
     } break;
     case T_SESSION: {
       const BSession* q = (const BSession*)b;

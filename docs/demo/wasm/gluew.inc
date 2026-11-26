@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // ---- demo glue: what the copied firmware functions (ui.inc) need, with the hardware left out.
 // JS (the demo page) writes the sensor state and the button pins; events it has to act on go in evq.
 char evq[512] = "";
@@ -98,3 +100,23 @@ void holdLabel(uint8_t b, char* big, char* det); uint8_t hgCount(); uint8_t hgAt
 void screenStep(); void oledBlankSet(bool b); void setPaused(bool on);
 uint32_t scrDownMs = 0;
 float WS[3][81];
+
+// alarms: the page's simulator keeps them (dash.js); these say what the OLED shows. A VMR control acknowledges (an event to it).
+struct AlarmSt { bool on, acked; uint32_t since, ackMs, lastHit; };
+AlarmSt al[AL_N];
+static const char* const AL_NAME[AL_N] = {"BNWAS", "ANCHOR", "ROLL", "HEAVE HS", "WIND", "BATTERY", "GPS"};
+uint8_t bnStage = 0; uint32_t bnLeftDemo = 0; float anchorDistM = NAN; uint32_t gpsNoFixMs = 0;
+uint8_t shtHeatSt = 0;                 // the SHT30's heater (dash.js sets it)
+uint32_t bnLeftS(uint32_t) { return bnLeftDemo; }
+bool alarmShowNow() {
+  if (loggerMode) return false;
+  if (bnStage) return true;
+  for (int i = 1; i < AL_N; i++) if (al[i].on && !al[i].acked && P.alOut[i] != AO_OFF) return true;
+  return false;
+}
+bool alarmCtl(uint32_t now) { bool busy = alarmShowNow(); ev("alarm:ctl"); if (busy) lastDrawMs = 0; return busy; }
+
+// the Voyage screen: the demo has no active route on the VMR side (rtN 0: "No active route")
+struct RtPt { float la, lo; char n[17]; };
+RtPt rtPtsDemo[2] = {}; RtPt* rtPts = rtPtsDemo; uint16_t rtN = 0; char rtName[24] = "";
+void drawVoyage();

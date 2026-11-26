@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Builds the VMR chart packs in regions.json from NOAA's Chart Display Service MBTiles.
 
     python3 build_packs.py --out packs/                      everything, downloading what's needed from NOAA

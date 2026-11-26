@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
+const CAP_VS = 12.08, CAP_TAU = 470;   // the demo's 12 V supply at the IWB and the Niskin capacitor's RC (ms)
 // ---- the simulator: made-up sea, ship, weather, battery and SeaLabMOS, fed to the firmware code (wasm) and the dashboard
 const SCEN = {
   underway: { name: 'Underway, moderate sea', hs: 2.0, tr: 13.5, te: 8.5, wind: 18, wdir: 320, sog: 13.4, cog: 302, lat: 34.21, lon: -120.83,
@@ -172,7 +175,7 @@ class Sim {
   // ---- SeaLabMOS: the WTB (cast session, Niskin bottles) and the IWB (CTD) in the water
   slmReset(arm) {
     this.slm = { armed: !!arm, state: arm ? 2 : 0, stT: 0, cast: 0, castN: 3, open: false, depth: 0, phase: 0, maxD: 0, trace: [], ev: [], cd: null, prof: [], tare: 10.1325,
-                 eth: !!arm, iwb: !!arm, v: 12.1, cap: 11.7, rdy: !!arm, pend: -1, held: 0, nkOn: true, refuse: [0, 0, 0, 0, 0, 0],
+                 eth: !!arm, iwb: !!arm, v: 12.1, cap: arm ? 11.6 : 0, rdy: !!arm, pend: -1, held: 0, nkOn: true, refuse: [0, 0, 0, 0, 0, 0],
                  b: [0, 1, 2, 3, 4, 5].map(i => ({ st: arm ? 1 : 0, src: 0, plan: [10, 30, 50, NaN, NaN, NaN][i], z: NaN, t: NaN, sp: NaN, rho: NaN, u: 0 })), btnDown: [0, 0, 0, 0, 0, 0] };
     if (arm) this.slmEv('Ethernet up'), this.slmEv('IWB tare ' + this.slm.tare.toFixed(4) + ' dbar');
   }
@@ -183,7 +186,7 @@ class Sim {
   slmArm(on) {
     const S = this.slm;
     if (on && !S.armed) { this.slmReset(false); this.slm.armed = true; this.slm.state = 1; this.slm.stT = this.t; this.say('SeaLabMOS: armed (WTB + IWB on)'); }
-    else if (!on && S.armed) { if (S.open) this.slmCastEnd('disarm'); S.armed = false; S.state = 0; S.iwb = S.eth = false; this.say('SeaLabMOS: disarmed (WTB + IWB off)'); }
+    else if (!on && S.armed) { if (S.open) this.slmCastEnd('disarm'); S.armed = false; S.state = 0; S.iwb = S.eth = false; S.cap = 0; S.rdy = false; S.capT = undefined; this.say('SeaLabMOS: disarmed (WTB + IWB off)'); }
   }
   slmCastStart(by) {
     const S = this.slm; if (!S.armed || S.open || !(S.state === 2 || S.state === 5)) return false;
@@ -202,6 +205,11 @@ class Sim {
     this.slmEv('Cast ' + S.castN + ' done: ' + S.maxD.toFixed(1) + ' m, ' + mr.toFixed(3) + ' kg/m3 (' + by + ')');
     if (S.opened && this.openCast() >= 0) { this.castToggle(); } S.opened = false;
   }
+  // the Niskin capacitor: charged from the 12 V through 47 ohm (RC 0.47 s), ready at 95 % of the supply (1.4 s from empty)
+  capCharge() { const S = this.slm; S.cap0 = Math.min(S.cap || 0, CAP_VS * 0.999); S.capT = this.t; S.rdy = false; }
+  capNow() { const S = this.slm, f0 = 1 - S.cap0 / CAP_VS, dt = this.t - S.capT, v = CAP_VS * (1 - f0 * Math.exp(-dt / CAP_TAU)),
+    need = CAP_TAU * Math.log(f0 / 0.05);   // ms from cap0 to 95 %
+    return { v, ready: dt >= need, inS: Math.max(0, (need - dt) / 1000) }; }
   nkFire(i, src) {
     const S = this.slm, B = S.b[i];
     if (!S.nkOn || B.st !== 1 || !S.open || !S.rdy || S.pend >= 0) { S.refuse[i] = this.t + 1000; return false; }
@@ -210,7 +218,7 @@ class Sim {
   slmStep(dt) {
     const S = this.slm, V = this.V;
     if (!S.armed) { V.slmArmed = 0; V.ctdCastOpen = 0; V.slmBtMs = 0; V.slmLvMs = 0; return; }
-    if (S.state === 1 && this.t - S.stT > 8000) { S.state = 2; S.eth = S.iwb = true; this.slmEv('Ethernet up'); this.slmEv('IWB tare ' + S.tare.toFixed(4) + ' dbar'); }
+    if (S.state === 1 && this.t - S.stT > 8000) { S.state = 2; S.eth = S.iwb = true; this.slmEv('Ethernet up'); this.slmEv('IWB tare ' + S.tare.toFixed(4) + ' dbar'); this.capCharge(); }
     if (S.state === 4 && this.t - S.stT > 5000) S.state = 2;
     if (S.open) {                                         // the winch: down at 0.5 m/s to 76 m, a 20 s soak there, up at 1 m/s
       if (S.phase === 1) { S.depth += 0.5 * dt; if (S.depth >= S.target) { S.depth = S.target; S.phase = 2; S.soak = 0; } }
@@ -221,19 +229,19 @@ class Sim {
     } else S.depth = Math.max(0, S.depth - dt);
     if (S.pend >= 0 && this.t - S.pendT > 400) {           // the IWB closes it: the bottle's record and a mark on the VMR
       const i = S.pend, B = S.b[i], q = this.prof(S.depth);
-      Object.assign(B, { st: 2, src: S.pendSrc, z: S.depth, t: q.t, sp: q.sp, rho: q.rho, u: this.unix }); S.pend = -1; S.rdy = false; S.cap = 9.4; S.capT = this.t;
+      Object.assign(B, { st: 2, src: S.pendSrc, z: S.depth, t: q.t, sp: q.sp, rho: q.rho, u: this.unix }); S.pend = -1; S.cap = 9.4; this.capCharge();
       const why = S.pendSrc === 3 ? 'planned depth' : S.pendSrc === 2 ? 'button' : 'dashboard';
       this.slmEv('Bottle ' + (i + 1) + ' fired at ' + S.depth.toFixed(2) + ' m (' + why + ')');
       this.addMark('M', 0, 'Bottle ' + (i + 1) + ' ' + S.depth.toFixed(1) + ' m', i + 1); this.toast('B', i + 1);
     }
-    if (!S.rdy && S.capT !== undefined) { S.cap = Math.min(11.7, 9.4 + 2.3 * (this.t - S.capT) / 1400); if (this.t - S.capT >= 1400) S.rdy = true; }
+    if (S.capT !== undefined) { const r = this.capNow(); S.cap = r.v; if (r.ready && !S.rdy) S.rdy = true; }
     if (S.open && (this._trT || 0) + 1000 <= this.t) { this._trT = this.t; const q = this.prof(S.depth); if (S.phase === 1) S.trace.push([+q.p.toFixed(3), +q.t.toFixed(3), +q.sp.toFixed(3), +q.rho.toFixed(3), +S.depth.toFixed(2)]); }
     // to the firmware's copy (what the WTB sends: status, live, bottles)
     V.slmArmed = 1; V.ctdCastOpen = S.open ? 1 : 0;
     V['slmSt.state'] = S.state; V['slmSt.iwbAlive'] = S.iwb ? 1 : 0; V['slmSt.eth'] = S.eth ? 1 : 0; V['slmSt.castNum'] = S.castN; V['slmSt.castOpen'] = S.open ? 1 : 0; V['slmSt.iwbV'] = S.v;
     if (S.iwb) { const q = this.prof(Math.max(0, S.depth)); V.slmLvMs = this.t >>> 0; V['slmLv.depth'] = S.depth; V['slmLv.t'] = S.depth > 0.3 ? q.t : this.wx.t + 0.4; V['slmLv.sp'] = S.depth > 0.3 ? q.sp : NaN; V['slmLv.rho'] = S.depth > 0.3 ? q.rho : NaN; }
     V.slmBtMs = this.t >>> 0; V['slmBt.on'] = S.nkOn ? 1 : 0; V['slmBt.ready'] = S.rdy && S.pend < 0 ? 1 : 0; V['slmBt.pend'] = S.pend < 0 ? 255 : S.pend;
-    V['slmBt.readyInS'] = S.rdy ? 0 : Math.max(0, 1.4 - (this.t - S.capT) / 1000);
+    V['slmBt.readyInS'] = S.rdy ? 0 : this.capNow().inS;
     for (let i = 0; i < 6; i++) { V['slmBt.st' + i] = S.b[i].st === 2 ? 2 : S.b[i].st; V['slmBt.planM' + i] = S.b[i].plan; }
   }
   // the WTB box's lights
@@ -368,6 +376,7 @@ class Sim {
     const V = this.V;
     for (const e of this.W.events()) {
       if (e === 'slm:arm') this.slmArm(true); else if (e === 'slm:disarm') this.slmArm(false);
+      else if (e === 'alarm:ctl') { if (this.dash) this.dash.alCtl = true; }
       else if (e === 'wifi:off') this.say('Wi-Fi OFF (screen button)'); else if (e === 'wifi:on') this.say('Wi-Fi ON (screen button)');
       else if (e === 'wifi:restart') { this.say('Wi-Fi restart'); this.wifiDownUntil = this.t + 4000; }
       else if (e === 'gps:off') this.say('GPS off (standby)'); else if (e === 'gps:on') this.say('GPS on (hot start)');

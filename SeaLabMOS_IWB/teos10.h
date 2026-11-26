@@ -1,4 +1,6 @@
-// TEOS-10 subset (GSW-C, BSD-3-Clause). See teos10.c.
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-GSW-additional-permission
+// TEOS-10 subset: the GSW-C functions in teos10.c (GSW licence, LICENSES/LicenseRef-GSW.txt). See teos10.c.
 #pragma once
 #ifdef __cplusplus
 extern "C" {

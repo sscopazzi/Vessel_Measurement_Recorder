@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // ---- the dashboard's side: the VMR's web server, answered from the simulator (the page itself is the firmware's web/index.html)
 class Dash {
   constructor(sim) {
@@ -52,7 +54,9 @@ class Dash {
     if (!file || !/^[A-Za-z0-9_-]{1,39}\.vmrchart$/.test(file.name)) return E('Not a .vmrchart file, or its name has spaces or symbols');
     const f = file.name.replace(/\.vmrchart$/, ''), p = this.chartParse(await file.arrayBuffer(), f);
     if (!p) return E('Not a whole VMR chart pack: download it again');
-    this.charts = this.charts.filter(c => c.f !== f).concat(p).sort((a, b) => b.h.maxz - a.h.maxz || (a.h.e - a.h.w) * (a.h.n - a.h.s) - (b.h.e - b.h.w) * (b.h.n - b.h.s));
+    if (this.charts.length >= 8 && !this.charts.some(c => c.f === f || c.f === (/-max$/.test(f) ? f.slice(0, -4) : f + '-max'))) return E('The VMR holds 8 chart packs at most: delete one first');
+    const sib = /-max$/.test(f) ? f.slice(0, -4) : f + '-max';   // a region's other pack (standard / max detail) goes too
+    this.charts = this.charts.filter(c => c.f !== f && c.f !== sib).concat(p).sort((a, b) => b.h.maxz - a.h.maxz || (a.h.e - a.h.w) * (a.h.n - a.h.s) - (b.h.e - b.h.w) * (b.h.n - b.h.s));
     this.chRev++; this.sim.say && this.sim.say('Charts: ' + f + ' loaded');
     return { status: 200, type: 'application/json', body: JSON.stringify({ saved: f }) };
   }
@@ -74,17 +78,30 @@ class Dash {
       if (path === '/devices') return J({ devs: s.devs.map(d => ({ mac: d.mac.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(':'), name: d.name, kind: d.kind, on: d.on, me: !!d.me, onU: d.onU || s.unix - 300, onAgo: 300, offU: 0, offAgo: 0 })) });
       if (path === '/dlstat') return J({ st: 0, seq: 0, n: '', got: 0, tot: 0, ms: 0, sd: 0, net: 0, err: '' });
       if (path === '/marks.csv') return { status: 200, type: 'text/csv', body: this.marksCsv() };
-      if (path === '/track') { this.trkTick(); const since = +(q.since || 0), cut = s.unix - 259200;
-        return T('t,lat_e7,lon_e7\n' + this.trk.filter(p => p.t > since && p.t >= cut).map(p => p.t + ',' + Math.round(p.la * 1e7) + ',' + Math.round(p.lo * 1e7)).join('\n') + '\n'); }
+      if (path === '/track') { this.trkTick(); this.alarmInit(); const since = +(q.since || 0), kh = this.trkSet[3], cut = kh === 'all' ? 0 : s.unix - kh * 3600;
+        const P = this.trk.filter(p => p.t > since && p.t >= cut), mx = q.full === '1' ? 500000 : 50000, k = P.length > mx ? Math.ceil(P.length / mx) : 1;
+        let o = 't,lat_e7,lon_e7\n', prev = 0;
+        P.forEach((p, i) => { if (prev && p.t - prev > 600) o += 'gap\n'; if (i % k === 0 || i === P.length - 1 || (prev && p.t - prev > 600)) o += p.t + ',' + Math.round(p.la * 1e7) + ',' + Math.round(p.lo * 1e7) + '\n'; prev = p.t; });
+        return { status: 200, type: 'text/plain', body: o, headers: { 'X-Track-Step': String(k), 'X-Track-Bytes': String(this.trk.length * 12) } }; }
       if (path === '/slm') return J(this.slmJson());
       if (path === '/charts') return J({ sd: true, rec: !!V.logging, rev: this.chRev, free: 31800000000 - this.charts.reduce((a, c) => a + c.h.flen, 0),
         packs: this.charts.map(c => ({ f: c.f, t: c.t, b: [c.h.w, c.h.s, c.h.e, c.h.n], z: [c.h.minz, c.h.maxz], px: c.h.px, n: c.h.tiles, size: c.h.flen, built: c.h.built, chart: c.h.chart, lf: c.lf })) });
       if (path === '/chart') return this.chartTile(+q.z, +q.x, +q.y);
       if (path === '/routes') return J({ act: this.rtAct, rev: this.rtRev, sd: true, routes: Object.keys(this.routes).sort().map(n => ({ n, size: this.routes[n].length })) });
       if (path === '/route') return this.routes[q.n] != null ? { status: 200, type: 'application/gpx+xml', body: this.routes[q.n] } : { status: 404, type: 'text/plain', body: 'no such route' };
+      if (path === '/wavegain') { const g = []; for (let k = 4; k <= 80; k++) { const T = 128 / k; g.push(T >= 6 && T <= 18 ? +(1.9 + 0.25 * Math.cos(T / 3)).toFixed(3) : null); }
+        return J({ df: 1 / 128, k0: 4, t: s.unix ? s.unix - 7200 : 0, agg: 1.9, now: g, wg: 1.93 }); }
+      if (path === '/diag') return J({ tasks: [['loopTask', 3120], ['web', 2890], ['sd', 2410], ['dl', 4980], ['IDLE', 780], ['wifi', 1640], ['tiT', 1020], ['esp_timer', 2310]],
+        in: 33600, inMin: 25600, inBig: 24500, ps: 1890000, psTot: 2097152, up: Math.floor((s.t - V.upBase) / 1000),
+        hist: [...Array(40)].map((_, i) => [33 + (i % 5 === 0 ? -2 : 0), 25, 1845]), sd: this.sdTest || { st: 0, w: null, r: null, err: '' },
+        nmea: ['$GNRMC,' + new Date(s.unix * 1000).toISOString().slice(11, 19).replace(/:/g, '') + '.000,A,3342.1234,N,11827.5678,W,' + (s.p.sog || 0).toFixed(2) + ',279.6,,,,A*4F', '$GNGGA,...,1,09,0.92,18.4,M,-34.2,M,,*6A (demo)'] });
+      if (path === '/cfgs') return J({ sd: true, sets: Object.keys(this.cfgs || {}).sort().map(n => ({ n, ok: true, t: 0 })) });
+      if (path === '/ships') { const S = this.ships || {}; return J({ sd: true, ships: Object.keys(S).sort().map(n => ({ n, s: S[n].length, t: 0 })) }); }
+      if (path === '/shipget') return (this.ships || {})[q.n] != null ? J(JSON.parse(this.ships[q.n])) : { status: 404, type: 'application/json', body: '{"error":"No such save"}' };
       if (path === '/lf.js' || path === '/lf.css') return null;   // the demo's Leaflet comes from unpkg
       if (path === '/files') {
         if (q.dir === 'p' || q.dir === 'a') return J({ sd: true, total: 31900000000, used: 5000000, files: [] });
+        if (q.dir === 'h') return J({ sd: true, total: 31900000000, used: 5000000, files: [{ n: '.trk/track.bin', s: this.trk.length * 12 }].concat(Object.keys(this.ships || {}).map(n => ({ n: '.ship/' + n + '.json', s: this.ships[n].length }))) });
         const fl = (V.logging ? [{ n: s.logName, s: s.bytes, a: false }] : []).concat(s.files.map(x => ({ n: x.n, s: x.s, a: false })));
         return J({ sd: true, total: 31900000000, used: fl.reduce((a, x) => a + x.s, 0), arch: 0, archB: 0, files: fl });
       }
@@ -116,6 +133,19 @@ class Dash {
       return file.text().then(t => { const n = file.name.replace(/\.gpx$/, ''); this.routes[n] = t; this.rtRev++; return J({ saved: n }); }); }
     if (path === '/routedel') { delete this.routes[f.n]; if (this.rtAct === f.n) this.rtAct = ''; this.rtRev++; return J({ ok: true }); }
     if (path === '/routeact') { if (f.n && this.routes[f.n] == null) return { status: 500, type: 'application/json', body: JSON.stringify({ error: 'No such route' }) }; this.rtAct = f.n || ''; this.rtRev++; return J({ ok: true }); }
+    if (path === '/anchor') { this.alarmInit(); const A = this.al.anc, E = (t, c = 400) => ({ status: c, type: 'application/json', body: JSON.stringify({ error: t }) });
+      if (f.act === 'drop') { if (V.gpsOff || !V['gps.gpsFix']) return E('No GPS fix: the anchor needs one', 409); A.on = true; A.la = Math.round(s.lat * 1e7); A.lo = Math.round(s.lon * 1e7); A.max = null; }
+      else if (f.act === 'set') { const la = +f.la, lo = +f.lo; if (!(Math.abs(la) <= 90 && Math.abs(lo) <= 180)) return E('Latitude -90 to 90, longitude -180 to 180'); A.la = Math.round(la * 1e7); A.lo = Math.round(lo * 1e7); A.on = true; }
+      else if (f.act === 'rad') { const r = +f.r; if (!(r >= 5 && r <= 5000)) return E('Radius 5-5000 m'); A.r = r; }
+      else if (f.act === 'up') { A.on = false; A.max = null; }
+      return J({ ok: true }); }
+    if (path === '/sdtest') { this.sdTest = { st: 2, w: 0.82, r: 1.94, err: '' }; return J({ ok: true }); }
+    if (path === '/cfgput') { (this.cfgs = this.cfgs || {})[f.n] = 1; return J({ ok: true }); }
+    if (path === '/cfgdel') { if (this.cfgs) delete this.cfgs[f.n]; return J({ ok: true }); }
+    if (path === '/cfgload') return { status: 400, type: 'application/json', body: JSON.stringify({ error: 'Restoring settings is not part of the demo' }) };
+    if (path === '/shipput') { if (!/^[A-Za-z0-9_-][A-Za-z0-9 ._-]{0,30}$/.test(f.n || '') || !(f.j || '').startsWith('{')) return { status: 400, type: 'application/json', body: '{"error":"Bad name"}' };
+      (this.ships = this.ships || {})[f.n] = f.j; return J({ ok: true }); }
+    if (path === '/shipdel') { if (this.ships) delete this.ships[f.n]; return J({ ok: true }); }
     if (path === '/chartdel') { this.charts = this.charts.filter(c => c.f !== f.f); this.chRev++; return J({ ok: true }); }
     if (path === '/event') { s.logEv(f.note || ''); return J({ n: s.logEvs.length }); }
     if (path === '/gps') { if (f.action === 'off' || f.action === 'on') { V.gpsOff = f.action === 'off' ? 1 : 0; s.say(V.gpsOff ? 'GPS off (standby)' : 'GPS on'); } return J({ ok: true }); }
@@ -132,12 +162,27 @@ class Dash {
     if (path === '/wifirestart') { s.wifiDownUntil = s.t + 4000; return J({ ok: true }); }
     if (path === '/hello') { s.devs[0].name = f.name || ''; s.devs[0].kind = f.kind || s.devs[0].kind; s.syncDevs(); return J({ ok: true }); }
     if (path === '/phonetime' || path === '/i2creset' || path === '/bufsave' || path === '/dlcancel' || path === '/trimcal') return J({ ok: true });
+    if (path === '/eeclear') return { status: 400, type: 'application/json', body: JSON.stringify({ error: 'Clearing the EEPROM is not part of the demo' }) };
     if (path === '/fwunlock' || path === '/ota' || path === '/fwrelay') return { status: 403, type: 'application/json', body: JSON.stringify({ error: 'Firmware updates are not part of the demo' }) };
     if (path === '/plot' || path === '/plotsave' || path === '/archive' || path === '/delete') return { status: 409, type: 'application/json', body: JSON.stringify({ error: 'Not part of the demo' }) };
     return T('not in the demo', 404);
   }
   doSet(f) {
     const s = this.sim, V = s.V, num = k => +f[k];
+    this.alarmInit();
+    if ('alout' in f) { const o = f.alout.split(',').map(Number); if (o.length === 7 && o.every(x => x >= 0 && x <= 4)) o.forEach((x, i) => { V['P.alOut' + i] = x; }); }
+    if ('bnmin' in f && num('bnmin') >= 3 && num('bnmin') <= 12) { this.al.min = num('bnmin'); this.al.bnT0 = s.t; }
+    [['alroll', 0], ['alhs', 1], ['alwind', 2], ['albatt', 3], ['algps', 4]].forEach(([k, i]) => { if (k in f && num(k) > 0) this.al.lim[i] = num(k); });
+    if (f.alack === '1') for (let i = 1; i < 7; i++) if (this.al.on >> i & 1) { this.al.ack |= 1 << i; this.al.ackMs[i] = s.t; }
+    if (f.altest === '1') s.say && s.say('Alarm test (the piezo and the motor, 1.5 s)');
+    if ('trkmv' in f) this.trkSet = [num('trkmv'), num('trkst'), num('trkm'), f.trkkeep === 'all' ? 'all' : num('trkkeep')];
+    if ('shtheat' in f) this.shtOn = f.shtheat !== '0';
+    if (f.shtheatnow === '1' && !this.shtSt) { this.shtSt = 1; this.shtT = s.t; }
+    if ('windhdg' in f) this.windHdg = f.windhdg === '' ? null : +f.windhdg;
+    if ('coloff' in f && !V.logging) this.colOff = num('coloff');
+    if ('wvcoh' in f) this.wva = [num('wvcoh'), num('wvba'), num('wvbb'), num('wvlr')];
+    if ('unitsx' in f) V['P.unitsX'] = num('unitsx') & 7;
+    if ('piezo' in f) this.pz = f.piezo.split(',').map(Number);
     if ('screen' in f && V.screen !== num('screen') && s.W.X.vmr_screen_avail(num('screen'))) { V.screen = num('screen'); V.oledBlank = 0; }
     if ('segscr' in f) V['P.segScreen'] = num('segscr');
     if ('lcdscr' in f) V['P.lcdScreen'] = num('lcdscr');
@@ -174,6 +219,9 @@ class Dash {
     if ('clm' in f) V['P.clinoMax'] = num('clm');
     if ('xb' in f) { this.xb = f.xb.split(',').map(Number); this.xbs = +(f.xbs || 0); V['P.xbScreen'] = this.xbs; }
     if ('exten' in f) { this.ext.en = num('exten'); }
+    const AL = { vclass: 'vc', vclasst: 'vct', barge: 'bt', barget: 'btt', blen: 'bl', bwid: 'bw' };   // the /set names of the vessel class and barge
+    for (const k of Object.keys(AL)) if (k in f) { f[AL[k]] = f[k]; if (!(AL[k] in this.set)) this.set[AL[k]] = null; }
+    for (const k of ['vx', 'vy']) if (k in f && !(k in this.set)) this.set[k] = null;
     for (const k of Object.keys(f)) if (k in this.set && typeof this.set[k] !== 'object') this.set[k] = isNaN(+f[k]) || f[k] === '' ? (f[k] === '' ? null : f[k]) : +f[k];
     for (const k of ['gmax', 'gmin']) if (k in f) V[k === 'gmax' ? 'P.graphMax' : 'P.graphMin'] = num(k);
   }
@@ -221,6 +269,8 @@ class Dash {
   // the track (the firmware's TRACK section): a point every 30 s while moving, 5 min while still. The demo starts with
   // 72 h behind the ship (made up: its course run backwards with slow turns, a 2-h station stop 30 h ago, and no fix
   // for 25 min 3 h ago and for 1 h 50 h ago, which the map shows as gaps)
+  // the SHT30's heater, as the firmware's: 2 min on (Heat now in the demo), then back to the air's temperature (3 min here)
+  shtTick() { const t = this.sim.t; if (this.shtSt === 1 && t - this.shtT > 120000) { this.shtSt = 2; this.shtT = t; } else if (this.shtSt === 2 && t - this.shtT > 180000) this.shtSt = 0; this.sim.V.shtHeatSt = this.shtSt || 0; return this.shtSt || 0; }
   trkTick() {
     const s = this.sim;
     if (!this.trk) { this.trk = []; const D2R = Math.PI / 180, v = Math.max(s.p.sog || 0, 6) * 0.5144, c0 = (s.p.cog || 0) * D2R, H = 3600;
@@ -277,18 +327,25 @@ class Dash {
       set: { ...this.set, wxs: [1200, 300, 3600, 10800][V['P.wxSpan']] || 1200, pf: V['P.posFmt'], zd: V['P.zdHours'], gsecs: [30, 60, 120, 300, 600][V['P.graphSecIdx']], gmax: V['P.graphMax'], gmin: V['P.graphMin'], clm: V['P.clinoMax'] || 40 },
       reset: 'power-on', crash: '', i2cMiss: '', i2cNote: '',
     };
-    d.wind = { on: true, ok: true, baud: 38400, tryb: 38400, n: Math.floor(s.t / 1000), bad: 0, rate: 0, y: 0.0, held: null, off: 0.0, z: 0.0, mc: true, mcv: 0.4,
+    const slow = gpsOn && p.sog < 1, wh = this.windHdg == null ? null : this.windHdg;
+    d.wind = { on: true, ok: true, baud: 38400, tryb: 38400, n: Math.floor(s.t / 1000), bad: 0, rate: 0, y: 0.0, slow, hdg: wh, off: 0.0, z: 0.0, mc: true, mcv: 0.4,
                aa: Math.round(s.awa), as: n(s.aws, 1), a2: Math.round(s.wind2 ? s.wind2.a2 : s.awa), s2: n(s.wind2 ? s.wind2.s2 : s.aws, 1), g10: n(s.wind2 ? s.wind2.g10 : s.aws, 1),
-               tr: gpsOn ? Math.round((s.twd - s.hdg + 360) % 360) : null, td: gpsOn ? Math.round(s.twd) : null, ts: gpsOn ? n(s.tws, 1) : null, sog: gpsOn ? n(p.sog, 1) : null };
+               tr: gpsOn ? Math.round((s.twd - s.hdg + 360) % 360) : null, td: gpsOn && (!slow || wh != null) ? Math.round(slow ? (wh + s.twd - s.hdg + 720) % 360 : s.twd) : null, ts: gpsOn ? n(s.tws, 1) : null, sog: gpsOn ? n(p.sog, 1) : null };
     const E = this.ext, ok = E.en & 0b1111;
     d.ext = { en: E.en, ok, addr: E.addr, src: E.src, xb: this.xb, xbs: this.xbs, xbok: this.xb.map(v => v ? 1 : 0), scan: '', p: n(w.p, 2), tend: n(V.presTendSim, 1), tendH: 3.0, p5: n(w.p, 2), ta5: n(w.t, 2), rh5: n(w.h, 1), m5: 5.0,
-              tb: n(w.t + 9.2, 1), ta: n(w.t, 1), rh: n(w.h, 1), pcf: 0b11111110, adc: [[Math.round(s.ui ? s.ui.knob * 255 : 128), 128, 255, 0, 40, 80, 160, 200], null] };
+              tb: n(w.t + 9.2, 1), ta: n(w.t, 1), rh: n(w.h, 1), shtk: 30, shto: this.shtOn !== false, shth: this.shtTick(), pcf: 0b11111110, adc: [[Math.round(s.ui ? s.ui.knob * 255 : 128), 128, 255, 0, 40, 80, 160, 200], null] };
     const L = ['', '', ''], lo = [V['ledOut[0]'], V['ledOut[1]'], V['ledOut[2]']];
     d.leds = { s: [V.castOpenNow ? 'on (cast open)' : 'off', !V.logging ? 'off (not recording)' : V.paused ? 'slow blink (paused)' : 'on (recording)', V.faultLed ? 'FAULT in Morse' : 'off'], why: V.faultNow, sw: true, pct: Math.round(V.contrast / 2.55) };
     d.imuOff = !imu; d.imuOk = imu; d.atDock = V['P.atDock']; d.gpsOff = !!V.gpsOff; d.upS = Math.floor((s.t - V.upBase) / 1000); d.imuWrX = 1;
+    // fused (the demo's own figures: the motion's Hs, a coherence and the pressure's gain from the two Hs); IMU off: the pressure alone
+    const gB = V.wvHs > 0 && V.wvHsB > 0 ? V.wvHsB / V.wvHs : null;
     d.wave = wv ? { n: 2048, need: 1024, dt: 500, te: n(V.wvTe, 1), tz: n(V.wvTz, 1), trs: n(V.wvTrs, 1), hs: n(V.wvHs, 2), hsm: n(V.wvHsMid, 2), tzm: n(V.wvTzMid, 1), cur: true, age: 12,
-                       hsb: n(V.wvHsB, 2), hsbm: n(V.wvHsBMid, 2), tzb: n(V.wvTz, 1), bn: 2048 }
-                  : { n: 0, need: 1024, dt: 500, te: null, tz: null, trs: null, hs: null, cur: false, age: -1 };
+                       hsb: n(V.wvHsB, 2), hsbm: n(V.wvHsBMid, 2), tzb: n(V.wvTz, 1), bn: 2048,
+                       hsf: n(V.wvHs, 2), hsfm: n(V.wvHsMid, 2), coh: gB != null ? 0.86 : null, gb: gB != null ? n(gB, 2) : null, po: 0, sleep: 0 }
+          : !V['P.atDock'] ? { n: 2048, need: 1024, dt: 500, te: null, tz: null, trs: null, hs: null, hsm: null, cur: true, age: 12,
+                       hsb: n(V.wvHsB, 2), hsbm: null, tzb: n(V.wvTz, 1), bn: 2048, hsf: null, hsfm: null, coh: null, gb: null, po: 1, sleep: 0,
+                       hsbc: V.wvHsB > 0 ? n(V.wvHsB / 1.9, 2) : null, gs: 1.9, gst: s.unix ? s.unix - 7200 : 0 }
+          : { n: 0, need: 1024, dt: 500, te: null, tz: null, trs: null, hs: null, cur: false, age: -1 };
     d.gmNear = wv && Math.abs(p.tr - p.te) / p.te < 0.15; d.boxT = n(w.t + 9.2, 1);
     Object.assign(d, graph);
     if (sky && s.sky && gpsOn) d.sky = s.sky.map(x => [...x]);
@@ -299,7 +356,54 @@ class Dash {
     d.heap = { free: 32800, big: 24500, min: 25600, pfree: 1890000, pbig: 1830000 };
     d.web = { dB: 11, dS: 84, dKB: 6420, dBr: 38, dSr: 910, dBb: 80, dSb: 3120, pS: 2140, pSb: 6050, pN: 1, wR: 15, wB: 120, dCut: 0, pCut: 0, pMem: 0 };
     d.trkN = this.trk.length; d.chRev = this.chRev; d.rtAct = this.rtAct; d.rtRev = this.rtRev;
+    d.al = this.alarmTick(); d.ux = V['P.unitsX'] || 0;
+    Object.assign(d.set, { trk: [...this.trkSet, this.trk.length, this.trk.length * 12], col: this.colOff, colf: this.colOff,
+      wva: this.wva, pz: this.pz });
     return d;
+  }
+  // ---- alarms, as the firmware's (VMR.ino, ALARMS): the outputs and limits from the Alarms card, BNWAS, the anchor watch.
+  // What shows on the OLED and the LEDs goes into the firmware's screen code (al[], bnStage); a VMR control acknowledges.
+  alarmInit() {
+    if (this.al) return;
+    this.al = { on: 0, ack: 0, ackMs: [0, 0, 0, 0, 0, 0, 0], hit: [0, 0, 0, 0, 0, 0, 0], bnSt: 0, bnT0: 0, min: 12, lim: [25, 3, 35, 20, 60], anc: { on: false, la: 0, lo: 0, r: 50, max: null } };
+    this.trkSet = [30, 300, 15, 72]; this.colOff = 0; this.wva = [0.5, 10, 14, 0.2]; this.pz = [0, 0];
+  }
+  alarmTick() {
+    this.alarmInit();
+    const s = this.sim, V = s.V, A = this.al, now = s.t, out = [0, 1, 2, 3, 4, 5, 6].map(i => V['P.alOut' + i] || 0), run = !V.loggerMode;
+    if (this.alCtl) {                                    // a VMR control: BNWAS restarts, everything showing acknowledged
+      this.alCtl = false; A.bnSt = 0; A.bnT0 = now;
+      for (let i = 1; i < 7; i++) if (A.on >> i & 1) { A.ack |= 1 << i; A.ackMs[i] = now; }
+    }
+    const bnRun = out[0] && !V['P.atDock'] && run;
+    if (!bnRun) { A.bnSt = 0; A.bnT0 = now; }
+    else if (A.bnSt === 0 && now - A.bnT0 >= A.min * 60000) { A.bnSt = 1; A.bnT0 = now; }
+    else if (A.bnSt === 1 && now - A.bnT0 >= 15000) { A.bnSt = 2; A.bnT0 = now; }
+    const fix = !V.gpsOff && !!V['gps.gpsFix'];
+    let d = null, b = null;
+    if (A.anc.on && fix) { const la = Math.round(s.lat * 1e7), lo = Math.round(s.lon * 1e7); d = s.dist(A.anc.la, A.anc.lo, la, lo); b = this.brg(A.anc.la, A.anc.lo, la, lo); A.anc.max = Math.max(A.anc.max || 0, d); }
+    const set = (i, c) => { const was = A.on >> i & 1; if (c && !was) { A.on |= 1 << i; A.ack &= ~(1 << i); } else if (!c && was) A.on &= ~(1 << i);
+      if (c && (A.ack >> i & 1) && now - A.ackMs[i] >= 300000) A.ack &= ~(1 << i); };
+    if (A.anc.on && !fix) { if (!A.ancNoFix) A.ancNoFix = now || 1; } else A.ancNoFix = 0;
+    set(1, run && out[1] && A.anc.on && ((d != null && d > ((A.on >> 1 & 1) ? A.anc.r * 0.95 : A.anc.r)) || (A.ancNoFix && now - A.ancNoFix >= 60000)));
+    if (!V['P.imuOff'] && Math.abs(s.roll) >= A.lim[0]) A.hit[2] = now;
+    set(2, run && out[2] && A.hit[2] && now - A.hit[2] < 10000);
+    const hs = V.wvHs; set(3, run && out[3] && hs >= ((A.on >> 3 & 1) ? A.lim[1] * 0.95 : A.lim[1]));
+    if (!V.gpsOff && s.tws >= A.lim[2]) A.hit[4] = now;
+    set(4, run && out[4] && A.hit[4] && now - A.hit[4] < 10000);
+    set(5, run && out[5] && !s.usb && s.batt < A.lim[3] + ((A.on >> 5 & 1) ? 2 : 0));
+    if (V.gpsOff || fix) A.gpsNoFix = 0; else if (!A.gpsNoFix) A.gpsNoFix = now || 1;
+    set(6, run && out[6] && A.gpsNoFix && now - A.gpsNoFix >= A.lim[4] * 1000);
+    V.gpsNoFixMs = A.gpsNoFix ? now - A.gpsNoFix : 0;
+    // into the firmware's screen code
+    for (let i = 1; i < 7; i++) { V['al' + i + '.on'] = A.on >> i & 1; V['al' + i + '.acked'] = A.ack >> i & 1; }
+    V['P.alRoll10'] = Math.round(A.lim[0] * 10); V['P.alHsCm'] = Math.round(A.lim[1] * 100); V['P.alWind10'] = Math.round(A.lim[2] * 10); V['P.alBattPct'] = A.lim[3]; V['P.alGpsS10'] = Math.round(A.lim[4] / 10);
+    V.bnStage = A.bnSt; V.bnLeftDemo = A.bnSt === 1 ? Math.max(0, Math.ceil((15000 - (now - A.bnT0)) / 1000)) : 0; V.anchorDistM = d == null ? NaN : d; V['P.anchorRadM'] = A.anc.r;
+    const bnLeft = !bnRun ? 0 : A.bnSt === 0 ? Math.max(0, Math.ceil((A.min * 60000 - (now - A.bnT0)) / 1000)) : V.bnLeftDemo;
+    const loud = (A.bnSt === 2) || [1, 2, 3, 4, 5, 6].some(i => (A.on >> i & 1) && !(A.ack >> i & 1) && out[i] >= 2);
+    return { out, on: A.on | (A.bnSt ? 1 : 0), ack: A.ack, snd: loud && !!this.pz[0], run, bn: { run: !!bnRun, st: A.bnSt, left: bnLeft, min: A.min }, lim: A.lim,
+      pz: !!this.pz[0], hap: !!(this.ext.en & 64), hapw: !!(this.ext.en & 64),
+      anc: { on: A.anc.on, la: A.anc.la / 1e7, lo: A.anc.lo / 1e7, r: A.anc.r, d: d == null ? null : Math.round(d), b: b == null ? null : Math.round(b), max: A.anc.max == null ? null : Math.round(A.anc.max) } };
   }
   scrAv() { let m = 0; for (let i = 0; i < 23; i++) if (this.sim.W.X.vmr_screen_avail(i)) m |= 1 << i; return m >>> 0; }
   brg(a1, o1, a2, o2) { const k = Math.PI / 180e7, p1 = a1 * k, p2 = a2 * k, dl = (o2 - o1) * k; const b = Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) * 180 / Math.PI; return b < 0 ? b + 360 : b; }

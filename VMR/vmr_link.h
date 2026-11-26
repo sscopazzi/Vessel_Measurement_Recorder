@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // VMR <-> WTB link over ESP-NOW (VMR / WTB / IWB interface spec, section 3). The same file is in both sketches.
 // Frames: an 8-byte header, then one of the bodies below, little-endian, at most 250 bytes in all.
 #pragma once
@@ -10,7 +12,7 @@
 
 // VMR -> WTB
 #define T_BEACON    0x01          // 2 Hz broadcast
-#define T_SHIP      0x02          // 1 Hz
+#define T_VMR       0x02          // 1 Hz: the VMR's time, position and deepest draft
 #define T_SESSION   0x03          // acked
 #define T_CONFIG    0x04          // acked
 #define T_FLIST     0x05
@@ -52,7 +54,7 @@
 struct LnkHdr { uint8_t magic, ver, type, flags; uint16_t seq, len; };
 
 struct BBeacon  { char fw[8]; uint8_t ch, pairOpen; char name[16]; };
-struct BShip    { int64_t utcMs; uint8_t utcSrc; float lat, lon, draftDeepM; };              // utcSrc 0 none, 1 phone, 2 GPS; draft NaN = none
+struct BVmr     { int64_t utcMs; uint8_t utcSrc; float lat, lon, draftDeepM; };              // utcSrc 0 none, 1 phone, 2 GPS; draft NaN = none
 struct BSession { uint8_t arm, manual, action; };                                            // action 0 none, 1 start cast, 2 stop cast, 3 tare
 struct BConfig  { float startDepthM, startHoldS, endDepthM, endHoldS, binM, soakS; uint16_t idleMin; uint8_t castToDraft; };
 struct BFList   { uint8_t dir; uint16_t start; };                                            // dir 0 /sess, 1 /casts

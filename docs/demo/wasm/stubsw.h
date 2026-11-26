@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // VMR demo: more state the screens read
 #define BATT_AVG_S 600
 float battRateAvg = NAN; uint32_t battAvgSince = 0; uint8_t battSrc = 0;
@@ -32,7 +34,12 @@ float markBrg(int32_t la1, int32_t lo1, int32_t la2, int32_t lo2) {
 
 float presTendSim = 1.2f; float presTendency() { return presTendSim; }
 uint64_t clockMsAt(uint32_t ms) { return (uint64_t)T_UNIX * 1000ULL + (ms % 1000); }
-float wvHsB = 2.63f, wvHsBMid = 2.20f;
+float wvHsB = 2.63f, wvHsBMid = 2.20f, wvTzB = 9.2f, wvHsBc = NAN, wvHsF = NAN, wvHsFMid = NAN;
+bool wvAnBOnly = false;                            // the pressure alone (the IMU off): the page sets it
+struct WvGain { uint32_t magic, unix; float agg; float g[81]; };
+WvGain wvGkDemo = {0, 0, 1.9f, {}}; WvGain* wvGk = &wvGkDemo;
+bool darkNow() { return false; }                   // (a screens-off firmware update: not in the demo)
+float battRateLast = NAN;
 
 uint8_t cfmBy = 255;
 uint32_t clinoMaxSu = 0, clinoMaxPu = 0;

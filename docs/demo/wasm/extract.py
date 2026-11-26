@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
 # VMR demo: copies the firmware's own code into the wasm build, unchanged.
 #   fw.inc:   helpers the screens use (displays lit, sensors present, the battery estimate, the bottles' status)
 #   draw.inc: VMR.ino from printAt() to the end of drawScreen(), and drawCtd() from slm.ino (every OLED screen)
@@ -31,6 +33,7 @@ names = [
  'void holdLabel(', 'bool holdNeedsConfirm(', 'void wifiSetOff(', 'void holdDo(', 'void oledBlankSet(', 'void cfmCancel(', 'void serviceButtons(', 'void serviceXb(',
  'void serviceMarkBtn(', 'void servicePot(', 'void setPaused(', 'void serviceLeds(', 'bool dlShowNow(',
  'void drawLoggerPeek(', 'void bootDraw(', 'void bootShow(', 'void bootText(', 'void bootLine(', 'void markOledBuild(',
+ 'static void rtRhumbF(', 'static void rtLegFrom(', 'void drawVoyage(',
 ]
 pre = ['// ---- copied from VMR.ino and slm.ino by extract.py (do not edit here)']
 for n in ['bool dispLit(', 'bool dispShown(', 'bool haveImuNow(', 'bool haveGpsNow(', 'bool haveWindNow(', 'int ledDutyNow(', 'void ledMarkEvent(',

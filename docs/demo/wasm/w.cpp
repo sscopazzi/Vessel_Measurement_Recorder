@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // VMR demo: the firmware's OLED drawing, buttons, LEDs, 7-segment and LCD code built for the browser (build_wasm.sh).
 // The page writes the sensors' state and the button pins into it, calls vmr_tick() every 20 ms and reads back the screens.
 #include "Adafruit_GFX.h"

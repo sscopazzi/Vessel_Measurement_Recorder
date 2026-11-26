@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-GSW-additional-permission
 // SeaLabMOS IWB (in-water board) - the wired SeaLabMOS CTD on an Adafruit ESP32-S2 Feather
 // Aspect Wave LLC - Sophie Scopazzi - firmware 1.11
 //

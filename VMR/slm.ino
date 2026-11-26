@@ -1,13 +1,15 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // ============================================================================
 //   SeaLabMOS: the WTB link, the relay, the CTD, Niskin bottles, the 12 V battery and the laptop port
 // ============================================================================
-// See VMR_WTB_IWB_Interface_Spec. With SeaLabMOS ticked in card 16 the VMR:
+// See VMR_WTB_IWB_Interface_Spec. With SeaLabMOS ticked in the Add-ons card the VMR:
 //  - powers the WTB and the IWB through a Latching Mini Relay FeatherWing (SET A4, UNSET pin 9) for a cast
-//    session, armed from card 8 or the knob, and keeps the session through a reset (RTC memory), not a power-up
-//  - talks to the WTB over ESP-NOW on the hotspot's channel (vmr_link.h): beacon and ship data out, status,
+//    session, armed from the Cast session card or the knob, and keeps the session through a reset (RTC memory), not a power-up
+//  - talks to the WTB over ESP-NOW on the hotspot's channel (vmr_link.h): beacon and the VMR's time and position out, status,
 //    the last second's CTD means, each finished cast's profile in, files and firmware relayed both ways
 //  - writes the iwb_* CSV columns, a /casts/ profile file per cast, and opens / closes its own cast marks
-//  - relays card 22's Niskin requests (arm, fire, safe, reset, planned depths) to the WTB, which owns the
+//  - relays the Fire control card's Niskin requests (arm, fire, safe, reset, planned depths) to the WTB, which owns the
 //    bottles' state, and keeps its last BOTTLES report; a request is refused (409) unless the session is armed
 //    and the WTB answers. A fired bottle becomes a location mark
 //  - reads the 12 V battery through the INA260 (0x40): % counted from the amps, low = under 20 % or at the
@@ -21,8 +23,8 @@
 #define RELAY_PULSE_MS     12          // the latching relay needs about 10 ms
 #define SLM_DISARM_WAIT_MS 30000UL     // the WTB closes an open cast first
 #define WTB_LOST_MS        5000UL
-#define SLM_PROF_MAX       1000        // bins kept for card 21 (250 m at 0.25 m)
-#define SLM_TRACE_MAX      3600        // card 21's live trace: 1-s points of the open cast
+#define SLM_PROF_MAX       1000        // bins kept for the CTD profile card (250 m at 0.25 m)
+#define SLM_TRACE_MAX      3600        // the CTD profile card's live trace: 1-s points of the open cast
 #define SLM_EV_N           8
 #define SLM_RTC_MAGIC      0x534C4D31UL
 
@@ -30,7 +32,7 @@ RTC_NOINIT_ATTR uint32_t slmRtcMagic;  // kept through a reset (watchdog, crash,
 RTC_NOINIT_ATTR uint8_t  slmRtcArmed;
 
 bool     slmArmed = false, slmDisarming = false, lnkOn = false;
-uint32_t slmDisarmMs = 0, slmArmMs = 0, pairUntilMs = 0, lastBeaconTx = 0, lastShipTx = 0;
+uint32_t slmDisarmMs = 0, slmArmMs = 0, pairUntilMs = 0, lastBeaconTx = 0, lastVmrTx = 0;
 uint16_t lnkSeq = 0;
 static const uint8_t BCAST[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 QueueHandle_t slmRxQ = nullptr, slmFileQ = nullptr, slmFwQ = nullptr;
@@ -56,7 +58,7 @@ volatile int8_t  slmReqOn = -1, slmReqManual = -1, slmReqToDraft = -1, slmReqIdl
 volatile int8_t  slmReqBattType = -1, slmReqBattChem = -1, slmReqEthOn = -1, slmReqEthCs = -1, slmReqEthInt = -1;
 char             slmReqIwbCmd[120] = ""; volatile bool slmReqIwbCmdOn = false;
 
-// Niskin bottles (Fire Control, card 22). The WTB owns the bottles' state; this keeps its last BOTTLES frame.
+// Niskin bottles (Fire Control, the Fire control card). The WTB owns the bottles' state; this keeps its last BOTTLES frame.
 #define NK_FIRE_TTL_MS   3000UL        // a Fire not delivered by then is dropped (it must not go off late)
 BBottles slmBt; uint32_t slmBtMs = 0;
 uint16_t slmBtSeq[NK_N];               // the last T_BOTTLE per bottle (a resend is the same seq)
@@ -301,7 +303,7 @@ void slmFrame(const SlmRx& f) {
       if (!isnan(q->sp) && k < (int)sizeof(r.note)) k += snprintf(r.note + k, sizeof(r.note) - k, ", S %.3f, rho %.3f", q->sp, q->rho);
       if (k < (int)sizeof(r.note)) snprintf(r.note + k, sizeof(r.note) - k, " (%s)", src);
       portENTER_CRITICAL(&bmqMux);
-      if ((uint8_t)(bmqHead - bmqTail) < 8) { bmq[bmqHead & 7] = r; bmqHead++; }
+      if ((uint8_t)(bmqHead - bmqTail) < 8) { bmq[bmqHead & 7] = r; bmqHead = bmqHead + 1; }
       portEXIT_CRITICAL(&bmqMux);
     } break;
     case T_IWBREPLY: { const BText* q = (const BText*)b; portENTER_CRITICAL(&slmMux); strlcpy(slmIwbReply, q->text, sizeof(slmIwbReply)); portEXIT_CRITICAL(&slmMux); } break;
@@ -327,13 +329,13 @@ void slmApplyRequests() {
   if (slmReqEthCs >= 0) { P.ethCsPin = slmReqEthCs; slmReqEthCs = -1; markPersistDirty(true); ledsApplyPins(); }
   if (slmReqEthInt >= 0) { P.ethIntPin = slmReqEthInt; slmReqEthInt = -1; markPersistDirty(true); ledsApplyPins(); }
   if (P.ethIntPin && P.ethIntPin == P.ethCsPin) { P.ethIntPin = 0; markPersistDirty(true); }   // one pin can't be both: polled
-  if (slmReqNkOn >= 0) {                                           // Niskin bottles ticked / unticked (card 16)
+  if (slmReqNkOn >= 0) {                                           // Niskin bottles ticked / unticked (the Add-ons card)
     bool on = slmReqNkOn; slmReqNkOn = -1;
     if (on != nkEnabled()) { P.flags31 = (P.flags31 & ~2) | (on ? 2 : 0); markPersistDirty(true); if (P.slmOn && slmArmed) slmSendNk(NK_SET_ON); }
   }
   if (!P.slmOn) return;
-  while (slmReqNkTail != slmReqNkHead) {                           // Fire / Arm / Safe from card 22
-    NkReq r = slmReqNk[slmReqNkTail & 7]; slmReqNkTail++;
+  while (slmReqNkTail != slmReqNkHead) {                           // Fire / Arm / Safe from the Fire control card
+    NkReq r = slmReqNk[slmReqNkTail & 7]; slmReqNkTail = slmReqNkTail + 1;
     if (!nkEnabled() || !slmArmed) continue;
     if (!nkFireId) nkFireId = esp_random() | 1;                    // the WTB skips a repeated id: don't start where a past one did
     BFire f = {++nkFireId, r.bottle, r.action};
@@ -370,14 +372,14 @@ void slmService(uint32_t now) {
     lnkTx(BCAST, T_BEACON, &bc, sizeof(bc));
     if (pairUntilMs && !bc.pairOpen) { pairUntilMs = 0; slmEvent(0, "Pairing closed"); }
   }
-  if (slmPaired() && now - lastShipTx >= 1000) {
-    lastShipTx = now;
-    BShip s; char src; utcNow(src);
+  if (slmPaired() && now - lastVmrTx >= 1000) {
+    lastVmrTx = now;
+    BVmr s; char src; utcNow(src);
     s.utcMs = clockSynced ? (int64_t)clockMsAt(millis()) : 0; s.utcSrc = !clockSynced ? 0 : src == 'G' ? 2 : 1;
     bool fx = gpsFixValid(); s.lat = fx ? gps.latE7 / 1e7f : NAN; s.lon = fx ? gps.lonE7 / 1e7f : NAN;
     uint16_t dd = max(P.draftFwdCm, max(P.draftAftCm, P.draftMidCm));
     s.draftDeepM = dd ? dd / 100.0f : NAN;
-    wtbTx(T_SHIP, &s, sizeof(s));
+    wtbTx(T_VMR, &s, sizeof(s));
   }
   for (int i = 0; i < VPEND_N; i++) {                           // acked frames: resent every 400 ms until answered
     VPend& p = vpend[i];
@@ -451,7 +453,7 @@ void serviceBattery12(uint32_t now) {
   battSrc = ina.aAvg > 0.02f ? BS_USB : BS_BATT;                // "charging" / "on the battery"
   battRateAvg = battRate; if (!battAvgSince) battAvgSince = now ? now : 1;
 }
-// card 18's estimate from the measured current (the LiPo's: battEst, from the voltage-based %)
+// the System card's estimate from the measured current (the LiPo's: battEst, from the voltage-based %)
 uint8_t battEst12(float& h, int& ma, bool& early) {
   h = NAN; ma = 0; early = false;
   if (isnan(battV) || isnan(ina.aAvg)) return BE_NONE;
@@ -525,7 +527,7 @@ bool slmCastLine(char* b, size_t n) {
 
 // ----------------------------------------------------------------- dashboard JSON
 static void jf(String& j, const char* k, float v, int d) { j += '"'; j += k; j += "\":"; if (isnan(v) || isinf(v)) j += "null"; else j += String(v, d); }
-// the small part, in /data (header, card 8)
+// the small part, in /data (header, the Cast session card)
 void slmJsonSmall(String& j) {
   j += "\"slm\":{\"on\":"; j += P.slmOn ? "true" : "false";
   j += ",\"nk\":"; nkJson(j);
@@ -556,7 +558,7 @@ void slmJsonSmall(String& j) {
   j += ",\"cs\":"; j += (int)P.ethCsPin; j += ",\"int\":"; j += (int)P.ethIntPin; j += "}";
   j += "},";
 }
-// card 22 (Fire Control). b: per bottle [state, source, planned m, depth m, t, sp, rho, utc s]
+// the Fire control card (Fire Control). b: per bottle [state, source, planned m, depth m, t, sp, rho, utc s]
 void nkJson(String& j) {
   j += "{\"en\":"; j += nkEnabled() ? "true" : "false";
   if (!nkEnabled() || !P.slmOn) { j += '}'; return; }
@@ -587,7 +589,7 @@ void nkJson(String& j) {
   }
   j += "]}";
 }
-// the rest, for card 21 (GET /slm)
+// the rest, for the CTD profile card (GET /slm)
 void handleSlm() {
   String j; j.reserve(4096);
   j += '{'; slmJsonSmall(j); j.remove(j.length() - 1);           // (no trailing comma)
@@ -662,14 +664,14 @@ void handleSlmSet() {
   if (has("nkon")) slmReqNkOn = num("nkon") ? 1 : 0;
   bool nkAsk = has("nkspd") || has("nkplan") || has("nkfire") || has("nkarm") || has("nksafe") || has("nkarmall") || has("nksafeall") || has("nkreset");
   if (nkAsk && (!P.slmOn || !nkEnabled() || !slmArmed)) {            // said so, instead of dropping it
-    server.send(409, "text/plain", !P.slmOn || !nkEnabled() ? "Niskin bottles are off (the Add-ons card)" : "Arm the cast session first (the Location marks card)"); return;
+    server.send(409, "text/plain", !P.slmOn || !nkEnabled() ? "Niskin bottles are off (the Add-ons card)" : "Arm the cast session first (the Cast session card)"); return;
   }
   auto nkAct = [&](const char* k, uint8_t a, bool one) {
     if (!has(k)) return true;
     int b = one ? num(k) - 1 : 0;
     if (one && (b < 0 || b >= NK_N)) return false;
     if ((uint8_t)(slmReqNkHead - slmReqNkTail) >= 8) return false;
-    slmReqNk[slmReqNkHead & 7] = {(uint8_t)b, a}; slmReqNkHead++;
+    slmReqNk[slmReqNkHead & 7] = {(uint8_t)b, a}; slmReqNkHead = slmReqNkHead + 1;
     return true;
   };
   if (has("nkspd") || has("nkplan")) {

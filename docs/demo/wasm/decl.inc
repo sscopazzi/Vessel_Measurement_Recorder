@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // VMR demo: declarations the drawing code needs (as VMR.ino)
 #define LOG_TAG_MAX 23
 #define EXT_N 5
@@ -157,8 +159,29 @@ struct Persist {
 
   uint8_t  xbSrc[5];
   uint8_t  xbScreen;
+
+  uint8_t  piezoPin[2];
+  uint8_t  alOut[7];
+  uint8_t  bnwasMin;
+  uint8_t  anchorOn;
+  int32_t  anchorLa, anchorLo;
+  uint16_t anchorRadM;
+  uint16_t alRoll10;
+  uint16_t alHsCm;
+  uint16_t alWind10;
+  uint8_t  alBattPct;
+  uint8_t  alGpsS10;
+  uint16_t trkMoveS, trkStillS, trkMoveM, trkKeepH;
+  uint8_t  colOff;
+  uint8_t  wvCoh100;
+  uint8_t  wvBlendA, wvBlendB;
+  uint8_t  wvLearn100;
+  uint8_t  unitsX;
+  uint16_t windHdg10; uint8_t shtHeatOff; uint8_t calFrac[3];
   uint16_t crc;
 };
+enum { AL_BNWAS = 0, AL_ANCHOR, AL_ROLL, AL_HS, AL_WIND, AL_BATT, AL_GPS, AL_N };
+enum { AO_OFF = 0, AO_VIS, AO_SOUND, AO_VIBE, AO_BOTH, AO_N };
 struct GpsData {
   float    gpsLat;
   float    gpsLon;
@@ -188,7 +211,7 @@ struct SkySat { uint8_t prn, el; uint16_t az; uint8_t snr; uint32_t ms; };
 struct DevSeen { uint8_t mac[6]; uint32_t ip, onUnix, offUnix, onMs, offMs; bool on; char name[24]; char kind[16]; };
 struct RollStats { uint16_t n; float sig, maxAmp, mean, rms; uint16_t overS, overP; float tMed; };
 enum { SCREEN_LIVE = 0, SCREEN_GRAPH, SCREEN_POSITION, SCREEN_ALLTIME, SCREEN_GPS,
-       SCREEN_CLINO, SCREEN_MARKS, SCREEN_SKY, SCREEN_DOCK, SCREEN_GMETER, SCREEN_WAVES, SCREEN_WAVESTAT, SCREEN_DEVICES, SCREEN_WIND, SCREEN_WX, SCREEN_WXGRAPH, SCREEN_BALL, SCREEN_CAST, SCREEN_REC, SCREEN_HEALTH, SCREEN_CTD, SCREEN_ROLL, SCREEN_DL, NUM_SCREENS };
+       SCREEN_CLINO, SCREEN_MARKS, SCREEN_SKY, SCREEN_DOCK, SCREEN_GMETER, SCREEN_WAVES, SCREEN_WAVESTAT, SCREEN_DEVICES, SCREEN_WIND, SCREEN_WX, SCREEN_WXGRAPH, SCREEN_BALL, SCREEN_CAST, SCREEN_REC, SCREEN_HEALTH, SCREEN_CTD, SCREEN_ROLL, SCREEN_DL, SCREEN_VOYAGE, NUM_SCREENS };
 enum { OTA_IDLE, OTA_RX, OTA_OK, OTA_FAIL };
 enum {
   ST_NONE = 0, ST_GPS, ST_IMU_READ, ST_IMU_RESET, ST_IMU_BEGIN, ST_RTC, ST_BINS, ST_BUTTONS,

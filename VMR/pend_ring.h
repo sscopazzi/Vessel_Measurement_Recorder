@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // the log rows' ring buffer (VMR.ino owns the storage). One writer (loop(): pendPut) and one reader at a time
 // (whoever holds sdMutex). Free-running byte counts; pendCap is a power of two, so they wrap cleanly at 2^32.
 // In a header so the Arduino builder makes no prototypes for these ahead of the sketch's own types.

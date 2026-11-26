@@ -1,4 +1,4 @@
-/* TEOS-10 subset, copied verbatim from GSW-C (github.com/TEOS-10/GSW-C, BSD-3-Clause licence).
+/* TEOS-10 subset, copied verbatim from GSW-C (github.com/TEOS-10/GSW-C, GSW licence: see LICENSES/LicenseRef-GSW.txt; redistributed unmodified).
    Only the functions the SeaLabMOS IWB and the WTB need: practical salinity from conductivity,
    Reference Salinity, Conservative Temperature, in-situ density and depth from pressure. */
 #include "teos10.h"

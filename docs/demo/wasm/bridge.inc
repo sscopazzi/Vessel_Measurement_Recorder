@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // ---- demo bridge: the functions the page calls (wasm exports)
 #define WX extern "C" __attribute__((visibility("default")))
 #include <splash.h>
@@ -58,6 +60,11 @@ WX const char* vmr_vars() {
   V(P.battAh10, 'H'); V(P.battDrawMa, 'H'); V(P.xbScreen, 'b'); V(P.ballBest10, 'H'); V(P.ballRot, 'b'); V(P.clinoMax, 'b'); V(P.posFmt, 'b');
   V(P.wxSpan, 'b'); V(P.briWeb, 'b'); V(P.potSwSrc, 'b'); V(P.shipBeamCm, 'H'); V(P.shipDraftCm, 'H'); V(P.keelBridgeCm, 'H');
   V(P.zeroApplied, 'b'); V(P.rollOffset, 'f'); V(P.pitchOffset, 'f');
+  V(P.unitsX, 'b');
+  for (int i = 0; i < AL_N; i++) { char b[120]; snprintf(b, sizeof b, "P.alOut%d b %lu\nal%d.on b %lu\nal%d.acked b %lu\n", i, (unsigned long)(uintptr_t)&P.alOut[i], i, (unsigned long)(uintptr_t)&al[i].on, i, (unsigned long)(uintptr_t)&al[i].acked); varTab += b; }
+  V(bnStage, 'b'); V(bnLeftDemo, 'I'); V(anchorDistM, 'f'); V(gpsNoFixMs, 'I'); V(P.anchorRadM, 'H'); V(shtHeatSt, 'b');
+  V(P.alRoll10, 'H'); V(P.alHsCm, 'H'); V(P.alWind10, 'H'); V(P.alBattPct, 'b'); V(P.alGpsS10, 'b');
+  V(wvAnBOnly, 'b'); V(wvTzB, 'f'); V(wvHsBc, 'f'); V(wvHsF, 'f'); V(wvHsFMid, 'f');
   V(faultNow, 's'); V(logName, 's'); V(apSsid, 's'); V(scratch, 's');
   return varTab.c_str();
 }

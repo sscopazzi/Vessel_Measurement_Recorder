@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Builds the dashboard into VMR.ino: minifies web/index.html's script and style, compresses it and web/logo.svg
 with zopfli (gzip format, smaller than gzip -9) and writes them as byte arrays between the PAGE markers at the
 end of the sketch. Edit the files in web/, then run

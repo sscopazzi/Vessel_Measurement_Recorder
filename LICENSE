@@ -1,0 +1,21 @@
+Aspect Wave VMR™ (Vessel Measurement Recorder) + SeaLabMOS
+Copyright 2026 Aspect Wave LLC
+
+This repository uses more than one licence. Each file's licence is given by its SPDX header or by
+REUSE.toml. The full texts are in LICENSES/.
+
+  Hardware design (wiring, bill of materials, interface spec, enclosure)  CERN-OHL-S-2.0
+  Firmware (VMR, WTB, IWB), dashboard, demo, build and chart tools        GPL-3.0-or-later
+    WTB and IWB firmware also carry an additional permission for the
+    TEOS-10 GSW code: LICENSES/LicenseRef-GSW-additional-permission.txt
+  vmr_reader.py and the analysis notebook                                 MIT
+  Documentation, images, white papers and data                            CC-BY-SA-4.0
+  Third-party code                                                        see THIRD_PARTY_NOTICES.md
+
+None of these licences grants rights to the Aspect Wave names or logo: see TRADEMARKS.md.
+
+Source Location (CERN-OHL-S-2.0): https://github.com/sscopazzi/Vessel_Measurement_Recorder
+
+Everything here is provided AS IS, WITHOUT ANY WARRANTY, to the extent permitted by the applicable
+licence. The VMR is not navigation equipment and not a substitute for the ship's approved stability
+or loading instruments.

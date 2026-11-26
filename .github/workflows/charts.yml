@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds the VMR chart packs (charts/regions.json) from NOAA's latest charts and publishes them as a release
 # named charts-YYYY-MM-DD: for each region a standard pack (<name>.vmrchart, the zooms regions.json gives) and a
 # max-detail one (<name>-max.vmrchart, every tile NOAA has in the region). Checked each month; only when NOAA's

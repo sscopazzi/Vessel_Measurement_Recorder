@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // VMR demo: the Datalogger peek, the boot list and the marks screen (as VMR.ino)
 
 uint32_t bootLineMs = 0;

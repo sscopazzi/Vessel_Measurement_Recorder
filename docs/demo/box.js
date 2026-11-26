@@ -1,9 +1,11 @@
+// SPDX-FileCopyrightText: 2026 Aspect Wave LLC
+// SPDX-License-Identifier: GPL-3.0-or-later
 // ---- the box: its buttons (press, or latch with "hold"), knob, switches, and what its displays and lights show
 (function () {
   const $ = id => document.getElementById(id);
   const bytes = Uint8Array.from(atob(WASM_B64), c => c.charCodeAt(0));
   const W = vmrWasm(bytes), V = W.V;
-  const sim = new Sim(W), dash = new Dash(sim);
+  const sim = new Sim(W), dash = new Dash(sim); sim.dash = dash;
   window.VMRDEMO = { handle: (m, u, b) => dash.handle(m, u, b), sim, W };
 
   // ---- buttons: pointer down / up, keyboard, and the hold latch beside each
@@ -73,11 +75,11 @@
     const P = parent.VMRDEMO;
     window.fetch = function (url, opt) {
       opt = opt || {}; const u = typeof url === 'string' ? url : url.url, m = (opt.method || 'GET').toUpperCase();
-      let b = opt.body; if (b instanceof URLSearchParams) b = b.toString(); if (typeof b !== 'string') b = '';
+      let b = opt.body; if (b instanceof URLSearchParams) b = b.toString(); if (typeof b !== 'string' && !(b instanceof FormData)) b = '';   // a file sent (FormData) as it is
       return new Promise((res, rej) => {
         if (opt.signal && opt.signal.aborted) return rej(new DOMException('Aborted', 'AbortError'));
-        setTimeout(() => { const r = P.handle(m, u, b); if (!r) return rej(new TypeError('Failed to fetch (simulated: the VMR is not answering)'));
-          res(new Response(r.body, { status: r.status, headers: { 'Content-Type': r.type } })); }, 12 + Math.random() * 30);
+        setTimeout(() => Promise.resolve(P.handle(m, u, b)).then(r => { if (!r) return rej(new TypeError('Failed to fetch (simulated: the VMR is not answering)'));
+          res(new Response(r.body, { status: r.status, headers: Object.assign({ 'Content-Type': r.type }, r.headers || {}) })); }), 12 + Math.random() * 30);
       });
     };
     const X = function () { this.upload = {}; this.readyState = 0; this.status = 0; this.responseText = ''; this.headers = {}; };
@@ -85,12 +87,19 @@
     X.prototype.setRequestHeader = function () {};
     X.prototype.getResponseHeader = function () { return null; };
     X.prototype.abort = function () { this.onabort && this.onabort(); };
-    X.prototype.send = function (b) { setTimeout(() => { const r = P.handle(this.m, this.u, typeof b === 'string' ? b : '');
-      if (!r) { this.onerror && this.onerror(); return; } this.readyState = 4; this.status = r.status; this.responseText = this.response = r.body; this.onload && this.onload(); this.onreadystatechange && this.onreadystatechange(); }, 300); };
+    // a file sent (FormData) is handed over as it is; its upload shows progress over about 2 s
+    X.prototype.send = function (b) { const fd = b instanceof FormData, tot = fd ? [...b.values()].reduce((a, v) => a + (v.size || 0), 0) : 0;
+      const fin = () => Promise.resolve(P.handle(this.m, this.u, fd ? b : typeof b === 'string' ? b : '')).then(r => {
+        if (!r) { this.onerror && this.onerror(); return; } this.readyState = 4; this.status = r.status; this.responseText = this.response = r.body; this.onload && this.onload(); this.onreadystatechange && this.onreadystatechange(); });
+      if (!tot) { setTimeout(fin, 300); return; }
+      let k = 0; const step = () => { k++; this.upload.onprogress && this.upload.onprogress({ lengthComputable: true, loaded: Math.min(tot, tot * k / 10), total: tot }); if (k < 10) setTimeout(step, 200); else fin(); };
+      setTimeout(step, 200); };
     window.XMLHttpRequest = X;
     addEventListener('DOMContentLoaded', () => { const d = document.createElement('div');
-      d.textContent = 'DEMO · simulated data'; d.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:99999;background:#f2b705;color:#1d1600;font:700 12px system-ui;padding:4px 8px;border-radius:5px;box-shadow:0 1px 4px #0005;pointer-events:none';
-      document.body.appendChild(d); });
+      d.textContent = 'DEMO · simulated data'; d.className = 'demobadge';
+      const st = document.createElement('style');   // above the phone's bottom bar, not over it
+      st.textContent = '.demobadge{position:fixed;right:8px;bottom:8px;z-index:99999;background:#f2b705;color:#1d1600;font:700 12px system-ui;padding:4px 8px;border-radius:5px;box-shadow:0 1px 4px #0005;pointer-events:none}@media (max-width:899px){.demobadge{bottom:calc(72px + env(safe-area-inset-bottom))}}';
+      document.head.appendChild(st); document.body.appendChild(d); });
   } + ')();<\/script>';
   const reloadDash = () => { $('dash').srcdoc = DASH_HTML.replace('<head>', '<head>' + INJECT); };
   reloadDash();
