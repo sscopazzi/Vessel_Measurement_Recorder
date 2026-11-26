@@ -1,0 +1,4 @@
+Aspect Wave VMR™ (Vessel Measurement Recorder) · Aspect Wave LLC
+Open hardware: CERN-OHL-S-2.0 · Firmware: GPL-3.0-or-later
+Complete source, licences and third-party notices:
+github.com/sscopazzi/Vessel_Measurement_Recorder
