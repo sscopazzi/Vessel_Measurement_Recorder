@@ -5,6 +5,8 @@
     python3 build_packs.py --out packs/ --only san-francisco-bay
     python3 build_packs.py --out packs/ --mbtiles ~/Downloads   use NOAA files already downloaded (no internet)
     python3 build_packs.py --out packs/ --previous last/packs.json   nothing built if nothing changed since then
+    python3 build_packs.py --plan plan.json --previous last/packs.json    only work out what to build (the Action's first job)
+    python3 build_packs.py --merge packs/ --plan plan.json                 the packs.json of each job's packs put together
 
 NOAA publishes one MBTiles file per region of the coast (https://distribution.charts.noaa.gov/ncds/index.html,
 updated weekly), and doesn't publish which file covers what. This script reads each file's coverage from its
@@ -12,13 +14,19 @@ first 64 KB (the MBTiles metadata sits at the front), downloads only the files t
 the pack from them. GitHub runs it each month (.github/workflows/charts.yml) and publishes the packs as a
 release when something has changed; it runs the same way on a laptop.
 
-Writes <out>/<name>.vmrchart for each pack and <out>/packs.json: what was built, from which NOAA files, and a
+Each region makes two packs: <name>.vmrchart, with the zooms regions.json gives each area (smaller), and
+<name>-max.vmrchart, every tile NOAA has inside the region's box at every zoom (nothing left out; "max": false on a
+region skips it). A max pack over 2 GiB, too big for a GitHub release, is left out and noted in packs.json.
+
+Writes <out>/<name>.vmrchart and <name>-max.vmrchart for each region and <out>/packs.json: what was built, from which NOAA files, and a
 fingerprint of what it was built from (each NOAA file's size and Last-Modified, regions.json and the pack
 tools, Leaflet included). With --previous (the last release's packs.json), when the fingerprint is the same nothing is
 downloaded or built: <out>/UNCHANGED is written instead and the workflow publishes nothing."""
-import argparse, glob, hashlib, json, os, sqlite3, sys, time, urllib.request, email.utils, re
+import argparse, glob, hashlib, json, os, sqlite3, sys, time, urllib.request, email.utils, re, multiprocessing
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from make_vmrchart import build, EXT, LEAFLET
+from make_vmrchart import build, EXT, LEAFLET, Tiles
+
+GH_MAX = 2147483648 - 4 * 1048576                 # a GitHub release file must be under 2 GiB
 
 CATALOG = "https://raw.githubusercontent.com/chartcatalogs/catalogs/master/NOAA_MBTiles_Catalog.xml"
 BASE = "https://distribution.charts.noaa.gov/ncds/mbtiles/"
@@ -126,7 +134,23 @@ def main():
     ap.add_argument("--work", default="noaa", help="folder for NOAA downloads (default ./noaa)")
     ap.add_argument("--previous", help="the last release's packs.json: build nothing if nothing has changed since")
     ap.add_argument("--force", action="store_true", help="build even if nothing has changed")
+    ap.add_argument("--plan", help="write what to build to this file (JSON) and stop; with --merge, the plan to merge by")
+    ap.add_argument("--merge", help="a folder of packs built in parts (each part's packs.json named <anything>.packs.json): write its packs.json")
+    ap.add_argument("--no-max", action="store_true", help="the standard packs only")
     a = ap.parse_args()
+    if a.merge:
+        plan = json.load(open(a.plan))
+        packs = [p for f in sorted(glob.glob(os.path.join(a.merge, "*.packs.json"))) for p in json.load(open(f))["packs"]]
+        order = {n: i for i, n in enumerate(plan["regions"])}
+        packs.sort(key=lambda p: (order.get(p["region"], 999), p["detail"] != "standard"))
+        got = {p["region"] for p in packs}
+        miss = [n for n in plan["regions"] if n not in got]
+        json.dump({"built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "extension": EXT, "packs": packs,
+                   "skipped": [k for f in sorted(glob.glob(os.path.join(a.merge, "*.packs.json"))) for k in json.load(open(f)).get("skipped", [])],
+                   "fingerprint": plan["fingerprint"]}, open(os.path.join(a.merge, "packs.json"), "w"), indent=1)
+        if miss: sys.exit("no packs for " + ", ".join(miss))
+        print("%d packs in %s/packs.json" % (len(packs), a.merge))
+        return
     regions = [r for r in json.load(open(a.regions))["regions"] if not a.only or r["name"] in a.only]
     if not regions: sys.exit("no such pack in " + a.regions)
     os.makedirs(a.out, exist_ok=True); os.makedirs(a.work, exist_ok=True)
@@ -161,7 +185,8 @@ def main():
         except Exception: prev = None
         if prev == fp:
             print("NOAA's files, the regions and the tools are the same as for %s: nothing to build" % a.previous)
-            open(os.path.join(a.out, "UNCHANGED"), "w").write("unchanged since the last release\n")
+            if a.plan: json.dump({"build": False, "regions": [], "fingerprint": fp}, open(a.plan, "w"), indent=1)
+            else: open(os.path.join(a.out, "UNCHANGED"), "w").write("unchanged since the last release\n")
             return
         if prev:
             for n, v in fp["noaa"].items():
@@ -169,20 +194,41 @@ def main():
             for k in ("packs", "regions", "tools"):
                 if prev.get(k) != fp[k]: print("  changed since the last release: %s" % k)
 
-    done = []
-    for reg in regions:
-        use = uses[reg["name"]]; box = region_box(reg)
-        if not use:
-            print("%s: no NOAA file covers it, skipped" % reg["name"]); continue
-        print("%s: from %s" % (reg["name"], ", ".join(os.path.basename(s) for s in use)))
-        paths = use if a.mbtiles else [download(u, a.work) for u in use]
-        p = build(reg["name"], reg["title"], reg["areas"], paths, a.out, minz=reg.get("minz", 3))
-        done.append({"name": reg["name"], "title": reg["title"], "file": os.path.basename(p), "bytes": os.path.getsize(p),
-                     "sha256": sha256(p), "bounds": box, "noaa": [os.path.basename(s) for s in use],
-                     "chart_date": time.strftime("%Y-%m-%d", time.gmtime(max(os.path.getmtime(x) for x in paths)))})
-    json.dump({"built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "extension": EXT, "packs": done, "fingerprint": fp},
-              open(os.path.join(a.out, "packs.json"), "w"), indent=1)
-    if len(done) < len(regions): sys.exit("%d of %d packs built" % (len(done), len(regions)))
+    if a.plan:
+        todo = [r["name"] for r in regions if uses[r["name"]]]
+        for r in regions:
+            if not uses[r["name"]]: print("%s: no NOAA file covers it" % r["name"])
+        json.dump({"build": True, "regions": todo, "fingerprint": fp}, open(a.plan, "w"), indent=1)
+        print("to build: " + " ".join(todo))
+        if len(todo) < len(regions): sys.exit("%d of %d regions have no NOAA file" % (len(regions) - len(todo), len(regions)))
+        return
+
+    done, skipped, regs_done = [], [], 0
+    with multiprocessing.Pool() as pool:                 # the tile images are looked at on every core
+        for reg in regions:
+            use = uses[reg["name"]]; box = region_box(reg)
+            if not use:
+                print("%s: no NOAA file covers it, skipped" % reg["name"]); continue
+            print("%s: from %s" % (reg["name"], ", ".join(os.path.basename(s) for s in use)))
+            paths = use if a.mbtiles else [download(u, a.work) for u in use]
+            T = Tiles(True, pool)                         # shared by the region's two packs
+            date = time.strftime("%Y-%m-%d", time.gmtime(max(os.path.getmtime(x) for x in paths)))
+            kinds = [("standard", reg["name"], reg["title"], False)]
+            if not a.no_max and reg.get("max", True): kinds.append(("max", reg["name"] + "-max", reg["title"] + " (max detail)", True))
+            for detail, name, title, every in kinds:
+                p = build(name, title, reg["areas"], paths, a.out, minz=reg.get("minz", 3), every=every, tiles=T,
+                          extra={"region": reg["name"], "detail": detail})
+                n = os.path.getsize(p)
+                if n > GH_MAX:
+                    os.remove(p); skipped.append({"name": name, "bytes": n, "why": "over 2 GiB, too big for a GitHub release"})
+                    print("%s: %.2f GB, over GitHub's 2 GiB for a release file: left out" % (name, n / 1e9)); continue
+                done.append({"name": name, "region": reg["name"], "detail": detail, "title": title, "file": os.path.basename(p),
+                             "bytes": n, "sha256": sha256(p), "bounds": box, "noaa": [os.path.basename(s) for s in use], "chart_date": date})
+            T = None
+            regs_done += 1
+    json.dump({"built": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "extension": EXT, "packs": done, "skipped": skipped,
+               "fingerprint": fp}, open(os.path.join(a.out, "packs.json"), "w"), indent=1)
+    if regs_done < len(regions): sys.exit("%d of %d regions built" % (regs_done, len(regions)))
     print("%d packs built in %s" % (len(done), a.out))
 
 

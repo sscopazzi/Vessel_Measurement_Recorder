@@ -1,7 +1,12 @@
 # Builds the VMR chart packs (charts/regions.json) from NOAA's latest charts and publishes them as a release
-# named charts-YYYY-MM-DD. Checked each month; only when NOAA's files (or the regions or pack tools) have
-# changed since the last charts- release is anything built and published. Run it by hand from the Actions tab
-# too ("Run workflow"; tick "Build even if nothing changed" to force it).
+# named charts-YYYY-MM-DD: for each region a standard pack (<name>.vmrchart, the zooms regions.json gives) and a
+# max-detail one (<name>-max.vmrchart, every tile NOAA has in the region). Checked each month; only when NOAA's
+# files (or the regions or pack tools) have changed since the last charts- release is anything built and published.
+# Run it by hand from the Actions tab too ("Run workflow"; tick "Build even if nothing changed" to force it).
+#
+# Three jobs: plan works out what to build and starts a draft release; build makes each region's two packs on a
+# machine of its own (all at once, each with up to 6 h) and adds them to the draft; publish puts packs.json together
+# and publishes the release. If any region fails, nothing is published (the draft is cleared on the next run).
 name: Chart packs
 
 on:
@@ -22,11 +27,63 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 30
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      regions: ${{ steps.plan.outputs.regions }}
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: The last release's packs.json, and drafts of runs that did not finish cleared
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for D in $(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '.[] | select(.draft and (.tag_name | startswith("charts-"))) | .id'); do
+            gh api -X DELETE "repos/${{ github.repository }}/releases/$D" && echo "Cleared an unfinished draft ($D)"
+          done
+          TAG=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '[.[] | select((.draft | not) and (.tag_name | startswith("charts-")))][0].tag_name // empty')
+          if [ -n "$TAG" ]; then gh release download "$TAG" -R "${{ github.repository }}" -p packs.json -D prev && echo "Last chart release: $TAG"; else echo "No chart release yet"; fi
+
+      - name: What to build
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ONLY="${{ github.event.inputs.only }}"
+          FORCE="${{ github.event.inputs.force }}"
+          python3 charts/build_packs.py --plan plan.json --work noaa --out packs --previous prev/packs.json ${ONLY:+--only $ONLY} $([ "$FORCE" = "true" ] && echo --force)
+          BUILD=$(python3 -c "import json; print('true' if json.load(open('plan.json'))['build'] else 'false')")
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "regions=$(python3 -c "import json; print(json.dumps(json.load(open('plan.json'))['regions']))")" >> "$GITHUB_OUTPUT"
+          if [ "$BUILD" != "true" ]; then echo "NOAA's charts haven't changed since the last release: nothing to build"; exit 0; fi
+          TAG="charts-$(date -u +%Y-%m-%d)"
+          if gh release view "$TAG" -R "${{ github.repository }}" >/dev/null 2>&1; then TAG="$TAG-${{ github.run_number }}"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          gh release create "$TAG" plan.json -R "${{ github.repository }}" --draft --title "Chart packs $(date -u +%Y-%m-%d)" --notes "Being built" --latest=false
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        region: ${{ fromJson(needs.plan.outputs.regions) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Room on the disk (the runner's unused tools removed)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
 
       - uses: actions/setup-python@v6
         with:
@@ -35,36 +92,61 @@ jobs:
       - name: Install Pillow
         run: pip install pillow
 
-      - name: The last release's packs.json
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Build ${{ matrix.region }}
         run: |
-          TAG=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '[.[] | select(.tag_name | startswith("charts-"))][0].tag_name // empty')
-          if [ -n "$TAG" ]; then gh release download "$TAG" -R "${{ github.repository }}" -p packs.json -D prev && echo "Last chart release: $TAG"; else echo "No chart release yet"; fi
-
-      - name: Build the packs
-        run: |
-          ONLY="${{ github.event.inputs.only }}"
-          FORCE="${{ github.event.inputs.force }}"
-          python3 charts/build_packs.py --out packs --work noaa --previous prev/packs.json ${ONLY:+--only $ONLY} $([ "$FORCE" = "true" ] && echo --force)
+          python3 charts/build_packs.py --only ${{ matrix.region }} --out packs --work noaa
+          mv packs/packs.json "packs/${{ matrix.region }}.packs.json"
           ls -la packs
 
-      - name: Publish the release
+      - name: Add them to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.plan.outputs.tag }}" packs/*.vmrchart "packs/${{ matrix.region }}.packs.json" -R "${{ github.repository }}" --clobber
+
+  publish:
+    needs: [plan, build]
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: packs.json and the notes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -f packs/UNCHANGED ]; then echo "NOAA's charts haven't changed since the last release: nothing published"; exit 0; fi
-          TAG="charts-$(date -u +%Y-%m-%d)"
+          TAG="${{ needs.plan.outputs.tag }}"
+          gh release download "$TAG" -R "${{ github.repository }}" -p "*.packs.json" -p plan.json -D packs
+          python3 charts/build_packs.py --merge packs --plan packs/plan.json
           python3 - > notes.md <<'PY'
           import json
           p = json.load(open("packs/packs.json"))
           print("VMR chart packs built %s from NOAA's Chart Display Service (ENC). **Not for navigation.**\n" % p["built"])
           print("Download a pack, then on the VMR dashboard go to Setup › Charts and upload it (not while recording).\n")
+          print("Two of each area: **standard** (`<area>.vmrchart`), detail kept where it counts and left out offshore, for a smaller file; "
+                "and **max detail** (`<area>-max.vmrchart`), every tile NOAA has for the area at every zoom. The VMR keeps one of the two "
+                "for an area: loading either replaces the other.\n")
           print("NOAA's date is when NOAA last made its chart tiles for that area (from its download server).\n")
-          print("| Pack | Area | Size | NOAA charts as of | NOAA files |\n|---|---|---|---|---|")
+          print("| Pack | Detail | Area | Size | NOAA charts as of | NOAA files |\n|---|---|---|---|---|---|")
           for k in p["packs"]:
-              print("| %s | %s | %.0f MB | %s | %s |" % (k["file"], k["title"], k["bytes"] / 1e6, k["chart_date"], ", ".join(k["noaa"])))
+              print("| %s | %s | %s | %s | %s | %s |" % (k["file"], k["detail"], k["title"],
+                    "%.2f GB" % (k["bytes"] / 1e9) if k["bytes"] >= 1e9 else "%.0f MB" % (k["bytes"] / 1e6), k["chart_date"], ", ".join(k["noaa"])))
+          for s in p.get("skipped", []):
+              print("\n%s was not published: %.2f GB, %s." % (s["name"], s["bytes"] / 1e9, s["why"]))
           PY
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" packs/*.vmrchart packs/packs.json \
-            --title "Chart packs $(date -u +%Y-%m-%d)" --notes-file notes.md --latest=false
+          cat notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.plan.outputs.tag }}"
+          R="${{ github.repository }}"
+          gh release upload "$TAG" packs/packs.json -R "$R" --clobber
+          for A in packs/*.packs.json; do gh release delete-asset "$TAG" "$(basename "$A")" -R "$R" -y; done
+          gh release delete-asset "$TAG" plan.json -R "$R" -y
+          gh release edit "$TAG" -R "$R" --notes-file notes.md --draft=false --latest=false

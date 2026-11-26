@@ -3,11 +3,14 @@
 
     python3 make_vmrchart.py --region regions.json:juan-de-fuca-puget --out packs/  ncds_20c.mbtiles
     python3 make_vmrchart.py --name test --bbox=-124.8,47.0,-122.1,48.8 --maxz 13 --out packs/  ncds_20c.mbtiles
+    python3 make_vmrchart.py --region regions.json:juan-de-fuca-puget --max --out packs/  ncds_20c.mbtiles
 
 NOAA's MBTiles come from https://distribution.charts.noaa.gov/ncds/index.html (one file per region,
 updated weekly). A pack is a set of areas, each a box (west,south,east,north) with the zooms kept there:
 the whole region light (zoom 12 or 13), the straits and sounds at 14, harbours at 16. A region that runs
-across two NOAA files takes both; where both have a tile, the first file with chart on it wins. Tiles with
+across two NOAA files takes both; where both have a tile, the first file with chart on it wins. A max-detail pack
+(<name>-max.vmrchart, --max) leaves nothing out: every tile NOAA has inside the region's box, at every zoom; the VMR
+keeps one of the two for a region (loading either replaces the other). Tiles with
 no chart on them (fully transparent) are left out, so the map shows nothing there rather than a blank.
 Each tile is kept as the smaller of NOAA's own image and a lossless WebP of it; tiles with the same bytes
 (open water, plain land) are stored once. Each pack also carries Leaflet (leaflet/, the map code the Chart card
@@ -52,30 +55,46 @@ def tile_range(w, s, e, n, z):
     return max(0, tx(w)), min(m, tx(e)), max(0, ty(n)), min(m, ty(s))
 
 
+def _look(arg):
+    """One tile image: (blank, pixels, its smallest form). A function of its own so a pool of processes can run it."""
+    data, webp = arg
+    blank, px, best = False, 256, data
+    try:
+        from PIL import Image
+        im = Image.open(io.BytesIO(data)); im.load(); px = im.size[0]
+        if im.mode in ("RGBA", "LA", "P"):
+            a = im.convert("RGBA").getchannel("A").getextrema()
+            blank = a[1] == 0
+        if webp and not blank:
+            if im.mode not in ("RGB", "RGBA"): im = im.convert("RGBA")
+            b = io.BytesIO(); im.save(b, "WEBP", lossless=True, quality=75, method=4)   # as small as method 6, 60x faster
+            if len(b.getvalue()) < len(data): best = b.getvalue()
+    except ImportError:
+        pass
+    except Exception:
+        pass
+    return blank, px, best
+
+
 class Tiles:
-    """Looks at each different tile image once: is it blank, how big is it, what is its smallest form."""
-    def __init__(self, webp):
-        self.webp, self.info = webp, {}          # sha1 -> (blank, px, smallest bytes)
+    """Looks at each different tile image once: is it blank, how big is it, what is its smallest form. With a pool, the
+    images of a batch are looked at in parallel (prepare). One Tiles can serve several packs (a region's two)."""
+    def __init__(self, webp, pool=None):
+        self.webp, self.pool, self.info = webp, pool, {}          # sha1 -> (blank, px, smallest bytes)
+
+    def prepare(self, datas):
+        new = {}
+        for d in datas:
+            h = hashlib.sha1(d).digest()
+            if h not in self.info and h not in new: new[h] = d
+        if not new: return
+        args = [(d, self.webp) for d in new.values()]
+        res = self.pool.map(_look, args, chunksize=16) if self.pool and len(args) > 16 else [_look(a) for a in args]
+        for h, r in zip(new, res): self.info[h] = r
 
     def look(self, data):
         h = hashlib.sha1(data).digest()
-        if h not in self.info:
-            blank, px, best = False, 256, data
-            try:
-                from PIL import Image
-                im = Image.open(io.BytesIO(data)); im.load(); px = im.size[0]
-                if im.mode in ("RGBA", "LA", "P"):
-                    a = im.convert("RGBA").getchannel("A").getextrema()
-                    blank = a[1] == 0
-                if self.webp and not blank:
-                    if im.mode not in ("RGB", "RGBA"): im = im.convert("RGBA")
-                    b = io.BytesIO(); im.save(b, "WEBP", lossless=True, quality=75, method=4)   # as small as method 6, 60x faster
-                    if len(b.getvalue()) < len(data): best = b.getvalue()
-            except ImportError:
-                pass
-            except Exception:
-                pass
-            self.info[h] = (blank, px, best)
+        if h not in self.info: self.info[h] = _look((data, self.webp))
         return h, self.info[h]
 
 
@@ -96,34 +115,61 @@ def wanted(areas, minz):
     return want
 
 
-def build(name, title, areas, sources, out_dir, webp=True, minz=3, quiet=False):
-    """areas: [{"bbox": [w,s,e,n], "maxz": z, "minz": z (optional)}]; sources: .mbtiles paths, best first."""
+def existing(dbs, box, minz):
+    """Max detail: every tile the files have inside box, at every zoom from minz to each file's deepest (XYZ)."""
+    want = set()
+    w, s, e, n = box
+    for db in dbs:
+        m = dict(db.execute("SELECT name, value FROM metadata").fetchall())
+        try: top = int(m.get("maxzoom"))
+        except (TypeError, ValueError): top = db.execute("SELECT MAX(zoom_level) FROM tiles").fetchone()[0] or 0
+        for z in range(minz, top + 1):
+            x0, x1, y0, y1 = tile_range(w, s, e, n, z)
+            r0, r1 = (1 << z) - 1 - y1, (1 << z) - 1 - y0          # MBTiles rows count up from the south (TMS)
+            for x, row in db.execute("SELECT tile_column, tile_row FROM tiles WHERE zoom_level=? AND tile_column BETWEEN ? AND ? "
+                                     "AND tile_row BETWEEN ? AND ?", (z, x0, x1, r0, r1)):
+                want.add((z, x, (1 << z) - 1 - row))
+    return want
+
+
+def build(name, title, areas, sources, out_dir, webp=True, minz=3, quiet=False, every=False, tiles=None, extra=None):
+    """areas: [{"bbox": [w,s,e,n], "maxz": z, "minz": z (optional)}]; sources: .mbtiles paths, best first.
+    every: max detail, every tile the files have inside the areas' box (the areas' zooms are not used). tiles: a Tiles
+    to use (and add to), so a region's second pack looks again at none of the images its first one did. extra: more
+    metadata."""
     dbs = [sqlite3.connect("file:%s?mode=ro" % p, uri=True) for p in sources]
-    want = wanted(areas, minz)
-    if not quiet: print("%s: %d tiles wanted across %d area(s)" % (name, len(want), len(areas)))
-    T = Tiles(webp)
+    box = [min(a["bbox"][0] for a in areas), min(a["bbox"][1] for a in areas), max(a["bbox"][2] for a in areas), max(a["bbox"][3] for a in areas)]
+    want = existing(dbs, box, minz) if every else wanted(areas, minz)
+    if every: areas = [{"label": "Everything NOAA has in the region", "bbox": box, "maxz": max((z for z, _, _ in want), default=minz)}]
+    if not quiet: print("%s: %d tiles %s across %d area(s)" % (name, len(want), "in NOAA's files" if every else "wanted", len(areas)))
+    T = tiles or Tiles(webp)
     blobs, index, where = [], [], {}            # where: sha1 -> blob number
     raw = got = blanks = 0; px = 0
-    t0 = time.time()
-    for k, (z, x, y) in enumerate(sorted(want)):
-        row = (1 << z) - 1 - y                  # MBTiles rows count up from the south (TMS)
-        pick = None
+    t0 = time.time(); keys = sorted(want); CH = 4096
+    for c0 in range(0, len(keys), CH):          # in batches: each file's tiles for the batch read, then their images looked at together
+        chunk = keys[c0:c0 + CH]; pend = chunk; pick = {}
         for db in dbs:
-            r = db.execute("SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?", (z, x, row)).fetchone()
-            if not r or not r[0]: continue
-            data = bytes(r[0]); h, (blank, p, best) = T.look(data)
-            if blank: continue
-            pick = (data, h, p, best); break
-        if pick is None:
-            blanks += 1; continue
-        data, h, p, best = pick
-        if not px: px = p
-        raw += len(data)
-        if h not in where:
-            where[h] = len(blobs); blobs.append(best)
-        index.append(((z << 48) | (x << 24) | y, where[h]))
-        got += 1
-        if not quiet and k % 20000 == 0 and k: print("  %d / %d tiles looked up, %.0f s" % (k, len(want), time.time() - t0))
+            if not pend: break
+            got_d = []
+            for (z, x, y) in pend:
+                r = db.execute("SELECT tile_data FROM tiles WHERE zoom_level=? AND tile_column=? AND tile_row=?", (z, x, (1 << z) - 1 - y)).fetchone()
+                if r and r[0]: got_d.append(((z, x, y), bytes(r[0])))
+            T.prepare([d for _, d in got_d])
+            for key, data in got_d:
+                h, (blank, p, best) = T.look(data)
+                if not blank: pick[key] = (data, h, p, best)
+            pend = [k for k in pend if k not in pick]          # blank or missing here: the next file may have it
+        for key in chunk:
+            if key not in pick:
+                blanks += 1; continue
+            z, x, y = key; data, h, p, best = pick[key]
+            if not px: px = p
+            raw += len(data)
+            if h not in where:
+                where[h] = len(blobs); blobs.append(best)
+            index.append(((z << 48) | (x << 24) | y, where[h]))
+            got += 1
+        if not quiet and (c0 // CH) % 10 == 9: print("  %d / %d tiles looked up, %.0f s" % (c0 + len(chunk), len(want), time.time() - t0))
     for db in dbs: db.close()
     if not index: sys.exit("%s: no chart tiles in %s for these areas" % (name, ", ".join(sources)))
     index.sort()
@@ -132,9 +178,9 @@ def build(name, title, areas, sources, out_dir, webp=True, minz=3, quiet=False):
     zs = [k >> 48 for k, _ in index]
     built, chart = int(time.time()), mbtiles_date(sources)
     lfv, lib = library()
-    meta = json.dumps({"name": name, "title": title, "leaflet": lfv,
+    meta = json.dumps(dict({"name": name, "title": title, "leaflet": lfv,
                        "source": "NOAA Chart Display Service (ENC): " + ", ".join(os.path.basename(p) for p in sources),
-                       "attribution": "NOAA ENC charts: not for navigation", "areas": areas}, separators=(",", ":")).encode()
+                       "attribution": "NOAA ENC charts: not for navigation", "areas": areas}, **(extra or {})), separators=(",", ":")).encode()
     meta_off = HDR; idx_off = meta_off + len(meta); idx_off += (-idx_off) % 16
     data_off = idx_off + 16 * len(index)
     offs, o = [], data_off
@@ -190,11 +236,19 @@ if __name__ == "__main__":
     ap.add_argument("--maxz", type=int, default=13, help="deepest zoom for --bbox (default 13)")
     ap.add_argument("--out", default=".", help="folder for the pack")
     ap.add_argument("--keep-images", action="store_true", help="keep NOAA's images as they are (no WebP)")
+    ap.add_argument("--max", action="store_true", help="with --region: the max-detail pack too (<name>-max.vmrchart)")
     a = ap.parse_args()
     if a.region:
+        import multiprocessing
         fn, rn = a.region.rsplit(":", 1)
         reg = next(r for r in json.load(open(fn))["regions"] if r["name"] == rn)
-        build(reg["name"], reg["title"], reg["areas"], a.mbtiles, a.out, webp=not a.keep_images, minz=reg.get("minz", 3))
+        with multiprocessing.Pool() as pool:
+            T = Tiles(not a.keep_images, pool)
+            build(reg["name"], reg["title"], reg["areas"], a.mbtiles, a.out, webp=not a.keep_images, minz=reg.get("minz", 3),
+                  tiles=T, extra={"region": reg["name"], "detail": "standard"})
+            if a.max:
+                build(reg["name"] + "-max", reg["title"] + " (max detail)", reg["areas"], a.mbtiles, a.out, webp=not a.keep_images,
+                      minz=reg.get("minz", 3), every=True, tiles=T, extra={"region": reg["name"], "detail": "max"})
     elif a.name and a.bbox:
         build(a.name, a.name, [{"bbox": [float(v) for v in a.bbox.split(",")], "maxz": a.maxz}], a.mbtiles, a.out,
               webp=not a.keep_images, minz=a.minz)
