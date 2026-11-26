@@ -1,10 +1,27 @@
 # Aspect Wave VMR™ (Vessel Measurement Recorder) + SeaLabMOS
 
-**[Try the demo](https://sscopazzi.github.io/Vessel_Measurement_Recorder/)**: the VMR box (OLED, 7-segment, LCD, buttons, knob and lights), the WTB's Niskin buttons and the dashboard, running in your browser on simulated data. It is a demo: nothing in it is a real measurement.
+### ▶ [Try the system demo](https://sscopazzi.github.io/Vessel_Measurement_Recorder/)
+The demo requires no hardware and no sign-up. It runs in your browser with the VMR box (OLED, 7-segment, LCD, buttons, knob and lights), the WTB's Niskin buttons and the dashboard, running in your browser on simulated data. It is a demo: nothing in it is a real measurement.
 
-An open-source, weatherproof instrument built from off-the-shelf Adafruit parts. It logs ship motion, position, waves and weather to microSD at 10 Hz, marks events with one button, and serves a live dashboard to any phone or laptop over its own Wi-Fi. With SeaLabMOS it also runs a CTD on a tether and fires six Niskin bottles.
+An open source, weather-resistant instrument built from off-the-shelf Adafruit (and other) parts. It logs ship motion, position, waves and weather to microSD at up to 10 Hz, marks events with one button, and serves a live dashboard to any phone or laptop over its own Wi-Fi hotspot while fully offline from the internet, with a chart of NOAA charts, the ship's track and planned routes. With the optional SeaLabMOS system, it also runs a CTD on a tether and fires six Niskin bottles. The VMR is not for navigation.
 
 Aspect Wave LLC · Sophie Scopazzi · firmware VMR 13.51, WTB 1.11, IWB 1.11
+
+## Features
+
+- **Motion:** roll, pitch and rate of turn, with maxima, roll statistics and the roll period
+- **Stability:** a GM cross-check from the natural roll period (IMO IS Code formula)
+- **Waves:** heave Hs from the IMU, pressure Hs from the barometer, and a fused Hs; encounter and roll periods
+- **At the dock:** trim and list, calibrated from entered draft marks
+- **Position and marks:** GPS, location marks and CTD casts with one button press (physical and Wi-Fi dashboard)
+- **Chart:** NOAA chart packs (see releases) stored on the microSD card (no internet needed), the track (72 h up to all of it), routes with ETAs, GPX import and export
+- **Weather:** pressure and its 3-h change, air temperature, humidity and dew point (SHT30 with frost heater, or SHT40), true and apparent wind with an optional Calypso ULP
+- **Magnetic:** magnetic heading, with variation from NOAA's World Magnetic Model 2025 (unreliable on large steel ships - testing ongoing with smaller vessels)
+- **Alarms:** anchor watch, BNWAS and limits, on the OLED, Fault LED, dashboard, and an optional piezo or vibration motor for auditory and haptic feedback
+- **Power:** LiPo fuel gauge with time left; 12 V battery monitoring (INA260) with SeaLabMOS; Datalogger mode, which sleeps the system between rows
+- **On the box:** 23 OLED screens, an optional 7-segment and 20×4 LCD. A physical knob, buttons and status LEDs
+- **Dashboard:** up to 4 connected devices (phones or laptops), with dark, day and red night modes, plot from file and file previews, downloads, settings backups, and over-the-air updates for the VMR, WTB and IWB
+- **SeaLabMOS (optional):** a tethered CTD with TEOS-10 salinity and density, and six Niskin bottles fired from the dashboard, the WTB or at planned depths (in development)
 
 ## What's here
 
