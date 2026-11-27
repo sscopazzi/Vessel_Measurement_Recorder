@@ -6,9 +6,10 @@
 #include <stdint.h>
 
 #define LNK_MAGIC   0xA5
-#define LNK_VER     1
+#define LNK_VER     2            // frames of another version are ignored: the VMR, WTB and IWB are updated together
 #define LNK_MAX     250
 #define LNK_DATA    224          // file and firmware bytes per frame
+#define LNK_FW      16           // a firmware version (MAJOR.MINOR.PATCH), NUL included: up to 15 characters
 
 // VMR -> WTB
 #define T_BEACON    0x01          // 2 Hz broadcast
@@ -53,7 +54,7 @@
 #pragma pack(push, 1)
 struct LnkHdr { uint8_t magic, ver, type, flags; uint16_t seq, len; };
 
-struct BBeacon  { char fw[8]; uint8_t ch, pairOpen; char name[16]; };
+struct BBeacon  { char fw[LNK_FW]; uint8_t ch, pairOpen; char name[16]; };
 struct BVmr     { int64_t utcMs; uint8_t utcSrc; float lat, lon, draftDeepM; };              // utcSrc 0 none, 1 phone, 2 GPS; draft NaN = none
 struct BSession { uint8_t arm, manual, action; };                                            // action 0 none, 1 start cast, 2 stop cast, 3 tare
 struct BConfig  { float startDepthM, startHoldS, endDepthM, endHoldS, binM, soakS; uint16_t idleMin; uint8_t castToDraft; };
@@ -63,14 +64,14 @@ struct BFListR  { uint8_t dir; uint16_t start, total; uint8_t n; BFEntry e[5]; }
 struct BFGet    { uint32_t reqId; uint8_t dir; char name[40]; uint32_t off, len; };          // len up to 64 KB, streamed back in FDATA frames
 struct BFData   { uint32_t reqId, off, total; uint8_t status; uint8_t d[LNK_DATA]; };      // status 0 ok, 1 no file, 2 SD busy; length from the header
 struct BFDel    { uint8_t dir; char name[40]; };
-struct BFwBegin { uint8_t target; uint32_t size, crc; char ver[12]; };                     // target 1 WTB, 2 IWB
+struct BFwBegin { uint8_t target; uint32_t size, crc; char ver[LNK_FW]; };                 // target 1 WTB, 2 IWB
 struct BFwChunk { uint32_t off; uint8_t d[LNK_DATA]; };
 struct BFwEnd   { uint32_t crc; };
 struct BFwAck   { uint8_t status; uint32_t next; char text[48]; };                           // status 0 going, 1 done, 2 error
 struct BText    { char text[200]; };                                                         // IWBCMD, IWBREPLY
 struct BAck     { uint16_t seq; uint8_t status; };
-struct BHello   { char fw[8]; char name[16]; };
-struct BStatus  { char wtbFw[8], iwbFw[8]; uint8_t eth, iwbAlive, state, castOpen, manual, sdOk; uint16_t castNum;
+struct BHello   { char fw[LNK_FW]; char name[16]; };
+struct BStatus  { char wtbFw[LNK_FW], iwbFw[LNK_FW]; uint8_t eth, iwbAlive, state, castOpen, manual, sdOk; uint16_t castNum;
                   float depthM, tareDbar, iwbV, tubeT, tubeRH, dewpt, iwbCpu; uint32_t sdFreeMB; char rawName[40]; };
 struct BLive    { int64_t utcSec; float pSea, depth, t, ec, sp, rho; uint8_t nPT, nC; };   // NaN where that second had no sample
 struct BCastDone{ uint16_t castNum; int64_t startUtc, endUtc; float lat, lon, maxDepth, meanRho, rangeTop, rangeBottom, draftUsed;
@@ -86,6 +87,7 @@ struct BBottles { uint8_t on, hw, ready, held, pend, castOpen; float capV, vin, 
                   uint8_t st[NK_N], src[NK_N]; float planM[NK_N], depthM[NK_N], t[NK_N], sp[NK_N], rho[NK_N]; int64_t utcMs[NK_N]; };
 struct BBottle  { uint8_t bottle, src; uint16_t castNum; int64_t utcMs; float depthM, pSea, t, sp, rho, lat, lon, capBefore, capAfter; };
 #pragma pack(pop)
+static_assert(sizeof(LnkHdr) + sizeof(BStatus) <= LNK_MAX && sizeof(LnkHdr) + sizeof(BBottles) <= LNK_MAX, "a frame over 250 bytes");
 // BNkCfg.set
 #define NK_SET_ON     0x01
 #define NK_SET_SPEED  0x02

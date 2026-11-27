@@ -32,7 +32,7 @@ What it does for you
     row after the second they cover and never repeated; iwb_state is on every row while
     SeaLabMOS is on. batt_a (12 V battery, INA260) is written with batt_v.
 
-Needs pandas. Written for the VMR by Aspect Wave LLC and Claude (Anthropic), 2026.
+Needs pandas. Written for the VMR by Aspect Wave LLC, 2026.
 """
 from __future__ import annotations
 

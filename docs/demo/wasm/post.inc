@@ -35,7 +35,7 @@ static const uint8_t HG_BASE[11] = {HG_RESTART, HG_WIFI, HG_INFO, HG_BALL, HG_FL
 enum { BS_UNKNOWN = 0, BS_USB, BS_BATT };
 static const char* const SEG_NAME[SEG_N] = {"roll", "pitch", "rate of turn", "SOG", "COG", "time (LT)", "battery",
                                            "pressure", "air temp", "humidity", "wind", "roll period", "GM", "countdown", "heave Hs"};
-char    apSsid[33] = "Vessel Measurement Recorder";
+char    apSsid[33] = "VMR";
 static const char* AP_PASS = "somestupidcode";
 float   extPa = NAN, extTb = NAN, extTa = NAN, extRh = NAN;
 uint16_t wxFineHead = 0, wxFineN = 0, wxCoarseHead = 0, wxCoarseN = 0;

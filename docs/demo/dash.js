@@ -210,6 +210,7 @@ class Dash {
     if ('ballrot' in f) V['P.ballRot'] = num('ballrot');
     if ('posfmt' in f) { const i = { dm: 0, d: 1, dms: 2 }[f.posfmt]; if (i !== undefined) V['P.posFmt'] = i; }
     if ('wxspan' in f) { const i = [1200, 300, 3600, 10800].indexOf(num('wxspan')); if (i >= 0) V['P.wxSpan'] = i; }
+    if ('apname' in f) { const v = String(f.apname).trim(); if (/^[A-Za-z0-9._()#-]+( [A-Za-z0-9._()#-]+)*$|^$/.test(v) && v.length <= 21) { this.apn = v; V.apSsid = 'VMR ' + (v || 'C4B0'); } }
     if ('battah' in f && num('battah') >= 0 && num('battah') <= 100) { V['P.battAh10'] = Math.round(num('battah') * 10); V['P.battDrawMa'] = 0; }
     if ('imu' in f) { V['P.imuOff'] = f.imu === '0' ? 1 : 0; if (!V['P.imuOff']) V['P.logRate'] = 0; }
     if ('lograte' in f && !V.logging && (V['P.imuOff'] || f.lograte === '0')) V['P.logRate'] = num('lograte');
@@ -249,7 +250,7 @@ class Dash {
                  b: S.b.map(b => [b.st, b.src, isNaN(b.plan) ? null : b.plan, n(b.z, 2), n(b.t, 3), n(b.sp, 3), n(b.rho, 3), b.u || null]),
                  ev: S.ev.filter(e => /Bottle/.test(e.t)).slice(0, 10) };
     return { slm: { on: true, armed: S.armed, dis: false, paired: true, pairing: false, wtb: S.armed, state: S.state, manual: false, toDraft: false, idle: true, eth: S.eth, iwb: S.iwb, cast: S.open ? S.castN : 0, castN: S.castN,
-                    sd: S.armed, sdMB: 29800, fw: ['1.11', '1.11'], v: S.armed ? S.v : null, dew: S.armed ? 4.2 : null, tubeT: S.armed ? 13.1 : null, tubeRH: S.armed ? 41 : null, tare: S.armed ? n(S.tare, 4) : null, cpu: S.armed ? 38 : null,
+                    sd: S.armed, sdMB: 29800, fw: ['2.0.0', '2.0.0'], v: S.armed ? S.v : null, dew: S.armed ? 4.2 : null, tubeT: S.armed ? 13.1 : null, tubeRH: S.armed ? 41 : null, tare: S.armed ? n(S.tare, 4) : null, cpu: S.armed ? 38 : null,
                     lv, evRev: S.ev.length, eth12: { on: S.armed, up: S.eth }, nk },
              trace: S.trace, ev: S.ev, reply: '', cd: S.cd, prof: S.prof, fwr: { st: 0, pct: 0, t: '' } };
   }
@@ -303,7 +304,7 @@ class Dash {
       gmet: { f: n(V.gFeltF, 3), s: n(V.gFeltS, 3), v: n(V.gVert, 3), pk: [n(s.g.pkF, 2), n(s.g.pkA, 2), n(s.g.pkS, 2), n(s.g.pkP, 2), n(s.g.hi, 2), n(s.g.lo, 2)] },
       dock: { trim: n(V.trimFt * 0.3048, 3), trimNow: n(V.trimFt * 0.3048, 3), ang: n(s.pitch, 3), list: n(s.roll, 2), listNow: n(s.roll, 2), L: SHIP.lbp, n: 60, cal: 0, win: 60, fill: 60 },
       paused: !!V.paused, pausedS: V.paused ? Math.floor((s.t - V.pausedAtMs) / 1000) : 0, otaMax: 1966080, fwSize: 1251328, serOled: !!V.serOledOn,
-      battV: n(V.battV, 3), battPct: n(s.batt, 0), cpuT: n(V.cpuTempC, 1), wifi: { rssi: s.devs[0].on ? [-58] : [], me: s.devs[0].on ? -58 : null, ssid: V.apSsid, ch: 6 },
+      battV: n(V.battV, 3), battPct: n(s.batt, 0), cpuT: n(V.cpuTempC, 1), wifi: { rssi: s.devs[0].on ? [-58] : [], me: s.devs[0].on ? -58 : null, ssid: V.apSsid, apn: this.apn || '', tag: 'C4B0', ch: 6 },
       gm: wv ? n(V.gmEst, 2) : null, gmC: n(s.gmC, 3), gmAvg: wv ? n(V.gmEst * 0.985, 2) : null, gmN: wv ? 73 : 0, gmLeft: 0,
       rs: s.rs ? [{ min: 10, n: Math.round(600 / p.tr), tp: n(s.rs.tp, 1), sig: n(s.rs.sig, 1), max: n(s.rs.max, 1), mean: n(s.rs.mean, 1), rms: n(s.rs.rms, 1), ovS: 0, ovP: 0 },
                   { min: 30, n: s.rs.n, tp: n(s.rs.tp, 1), sig: n(s.rs.sig, 1), max: n(s.rs.max, 1), mean: n(s.rs.mean, 1), rms: n(s.rs.rms, 1), ovS: s.rs.ovS, ovP: s.rs.ovP }] : [],

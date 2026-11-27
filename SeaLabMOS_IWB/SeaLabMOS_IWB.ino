@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Aspect Wave LLC
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-GSW-additional-permission
 // SeaLabMOS IWB (in-water board) - the wired SeaLabMOS CTD on an Adafruit ESP32-S2 Feather
-// Aspect Wave LLC - Sophie Scopazzi - firmware 1.11
+// Aspect Wave LLC - Sophie Scopazzi - firmware version: FW_VERSION below
 //
 // The wired build: an Ethernet FeatherWing, no RTC and no microSD. Power and data come down one network cable from the WTB (wet-talk board)
 // in the VMR's box: 12 V on the spare pairs (passive PoE) -> MPM3610 buck -> the Feather's 3V pin.
@@ -28,7 +28,8 @@
 // Board: Adafruit Feather ESP32-S2 (arduino-esp32 3.3.x), Partition Scheme: Minimal SPIFFS
 // Libraries: BlueRobotics MS5837, BlueRobotics TSYS01, Adafruit SHT4x, Adafruit NeoPixel
 
-#define FW_VERSION "1.11"
+#define FW_VERSION "2.0.0"      // MAJOR.MINOR.PATCH (semver.org): see Versions in README.md. Up to 15 characters (the WTB passes it on in 16 bytes)
+static_assert(sizeof(FW_VERSION) <= 16, "FW_VERSION: up to 15 characters (the WTB's iwbFw, LNK_FW in vmr_link.h)");
 const char FW_TAG[] = "SLMVER " FW_VERSION;      // the firmware page refuses an image without this tag
 
 // ###### CONFIG ######
@@ -310,7 +311,7 @@ void handleStatus() {
 void handleUpdatePage() {
   web.send(200, "text/html", "<!doctype html><meta name=viewport content='width=device-width'><title>SeaLabMOS IWB</title>"
     "<body style='font-family:sans-serif;max-width:480px;margin:24px auto'><h3>SeaLabMOS IWB " FW_VERSION "</h3>"
-    "<form method=POST action=/update enctype=multipart/form-data><input type=file name=fw accept=.bin> <button>Update</button></form>"
+    "<form method=POST action=/update enctype=multipart/form-data><input type=file name=fw> <button>Update</button></form>"
     "<p><a href=/status>status</a></p>");
 }
 void handleUpdateUpload() {

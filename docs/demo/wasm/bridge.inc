@@ -88,7 +88,7 @@ WX void vmr_init() {
   wxFine = new WxPt[WX_FINE_N]; wxCoarse = new WxPt[WX_COARSE_N]; wxFineN = wxCoarseN = wxFineHead = wxCoarseHead = 0;
   devs = new DevSeen[DEV_N]; memset(devs, 0, sizeof(DevSeen) * DEV_N); devCount = 0;
   memset(WS, 0, sizeof WS); wvSpec = WS;
-  strcpy(apSsid, "Vessel Measurement Recorder C4B0");
+  strcpy(apSsid, "VMR C4B0");
   screen = SCREEN_LIVE;
   for (auto& b : xbBtn) b.ext = 1;
   markOledBuild();

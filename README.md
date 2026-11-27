@@ -5,7 +5,7 @@ The demo requires no hardware and no sign-up. It runs in your browser with the V
 
 An open source, weather-resistant instrument built from off-the-shelf Adafruit (and other) parts. It logs ship motion, position, waves and weather to microSD at up to 10 Hz, marks events with one button, and serves a live dashboard to any phone or laptop over its own Wi-Fi hotspot while fully offline from the internet, with a chart of NOAA charts, the ship's track and planned routes. With the optional SeaLabMOS system, it also runs a CTD on a tether and fires six Niskin bottles. The VMR is not for navigation.
 
-Aspect Wave LLC · Sophie Scopazzi · firmware VMR 13.51, WTB 1.11, IWB 1.11
+Aspect Wave LLC · Sophie Scopazzi · firmware VMR 14.0.0, WTB 2.0.0, IWB 2.0.0
 
 ## Features
 
@@ -52,7 +52,7 @@ Passwords and the ESP-NOW keys are in the source on purpose (`AP_PASS`, `FW_PASS
 
 ## Updating firmware
 
-Sketch > Export Compiled Binary, then upload the `.ino.bin` in the dashboard's Firmware update card, picking the target: VMR, WTB or IWB (the VMR relays the other two). Each image carries its board's tag (VMRVER, WTBVER, SLMVER) and is refused by the wrong board. A new Feather is flashed over USB. Released VMR images are in `VMR/.vmr_files/` (`VMR_v13.51.vmr` is the `.ino.bin` of this source).
+In the dashboard's Firmware update card, pick the target (VMR, WTB or IWB: the VMR relays the other two) and its image: a release's `VMR_v<version>.vmr`, `WTB_v<version>.wtb` or `IWB_v<version>.iwb`, or the `.ino.bin` of your own build (Sketch > Export Compiled Binary). Each image carries its board's tag (VMRVER, WTBVER, SLMVER) and is refused by the wrong board. A new Feather is flashed over USB. Released images are on the [Releases](https://github.com/sscopazzi/Vessel_Measurement_Recorder/releases) page, attached to each version's tag: `VMR_v14.0.0.vmr`, `WTB_v2.0.0.wtb`, `IWB_v2.0.0.iwb`.
 
 ## Reading the data
 
@@ -60,7 +60,26 @@ CSV files with `#` header lines describing every column: `pd.read_csv(path, comm
 
 ## Versions
 
-Small changes step the hundredths (13.51 → 13.52), larger ones the tenths. History: `VMR/CHANGELOG.md`, `SeaLabMOS_WTB/CHANGELOG.md`, `SeaLabMOS_IWB/CHANGELOG.md`. What it can't do: `VMR/KNOWN_LIMITATIONS.md`.
+The VMR, WTB and IWB each carry a [Semantic Versioning](https://semver.org) number, MAJOR.MINOR.PATCH (`FW_VERSION` in each sketch). Semantic versioning starts at VMR 14.0.0 and WTB / IWB 2.0.0; versions before that (VMR 13.52, WTB and IWB 1.11 and earlier) used tenths and hundredths.
+
+- **MAJOR** when something that depends on the firmware stops working with the version before:
+  - the CSV's columns or format (a column renamed, moved or removed, so `vmr_reader.py` or a user's script breaks)
+  - the VMR / WTB / IWB link (`vmr_link.h`): all three boards then need updating together
+  - the settings layout, when settings or backups don't carry over from the version before
+  - the chart pack format (`.vmrchart` files that need rebuilding)
+- **MINOR** for a new feature that keeps all of those working (new CSV columns added at the end, new settings that carry over).
+- **PATCH** for a fix that changes no feature.
+
+A version is up to 15 characters (`LNK_FW` in `vmr_link.h`). The three boards are numbered separately: a MAJOR change to the link steps all three, and they are updated together (boards on different link versions ignore each other).
+
+### Releasing
+
+1. Set `FW_VERSION` in each sketch that changed, and add its entry to that board's `CHANGELOG.md`.
+2. Build each changed board (Sketch > Export Compiled Binary) and rename each `.ino.bin` for its board: `VMR_v<version>.vmr`, `WTB_v<version>.wtb` and `IWB_v<version>.iwb`.
+3. Commit, then tag the commit with the VMR's version and push the tag: `git tag -a v14.0.0 -m "VMR 14.0.0, WTB 2.0.0, IWB 2.0.0"`, then `git push origin v14.0.0`. (In VS Code: Source Control > ... > Tags > Create Tag, then push.) A release with only a WTB or IWB change is tagged `wtb-v2.0.1` or `iwb-v2.0.1`.
+4. On GitHub, Releases > Draft a new release, pick the tag, title it like the tag message, paste the changelog entries, and attach the images. Firmware images are not committed to the repository.
+
+History: `VMR/CHANGELOG.md`, `SeaLabMOS_WTB/CHANGELOG.md`, `SeaLabMOS_IWB/CHANGELOG.md`. What it can't do: `VMR/KNOWN_LIMITATIONS.md`.
 
 ## Hardware sources
 
@@ -68,7 +87,7 @@ The bill of materials (`docs/VMR_Bill_of_Materials_v12.2.docx`) and the WTB/IWB 
 
 ## Credits and licences
 
-Designed by Sophie Scopazzi, Aspect Wave LLC, with Claude (Anthropic).
+Designed by Sophie Scopazzi, Aspect Wave LLC.
 
 - Hardware design: CERN-OHL-S-2.0
 - Firmware, dashboard, demo and tools: GPL-3.0-or-later. The WTB and IWB firmware carry an additional

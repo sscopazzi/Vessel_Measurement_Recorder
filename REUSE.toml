@@ -7,7 +7,7 @@ SPDX-PackageDownloadLocation = "https://github.com/sscopazzi/Vessel_Measurement_
 [[annotations]]
 path = ["**.md", "docs/VMR_Overview.pdf", "docs/VMR_Calculations.pdf", "docs/VMR_Controls.pdf",
         "docs/VMR_Known_Limitations.pdf", "docs/VMR_Overview.docx", "docs/VMR_Calculations.docx",
-        "docs/VMR_Controls.docx", "docs/VMR_Known_Limitations.docx",
+        "docs/VMR_Controls.docx", "docs/VMR_Known_Limitations.docx", "docs/VMR_Label_Text.txt",
         "docs/OLED_screens.png", "docs/VMR_v*_LCD_screens.png", "white_papers_and_testing/**"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Aspect Wave LLC"
@@ -28,9 +28,9 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Aspect Wave LLC"
 SPDX-License-Identifier = "CERN-OHL-S-2.0"
 
-# Files that can't carry a header, or are generated: firmware images, the logo, chart regions, the built demo
+# Files that can't carry a header, or are generated: the logo, chart regions, the built demo
 [[annotations]]
-path = ["VMR/.vmr_files/**", "VMR/web/logo.svg", "charts/regions.json", "docs/index.html"]
+path = ["VMR/web/logo.svg", "charts/regions.json", "docs/index.html"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Aspect Wave LLC"
 SPDX-License-Identifier = "GPL-3.0-or-later"

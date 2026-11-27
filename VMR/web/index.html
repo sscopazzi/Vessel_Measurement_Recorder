@@ -1269,6 +1269,8 @@ body.red .trkc button[aria-pressed=true]{background:var(--roll);border-color:var
  <div class="sub" id="cfgmsg"></div>
  <div class="lbl sh">Wi-Fi</div>
  <div class="sub" id="wifiinfo">--</div>
+ <div class="row" style="margin-top:6px"><label class="sub" for="apname">Wi-Fi name</label><span style="display:flex;gap:6px;align-items:center"><span class="sub">VMR</span><input id="apname" maxlength="21" autocapitalize="off" spellcheck="false" style="width:11em;padding:4px 6px;border-radius:6px;border:1px solid var(--grid);background:var(--bg);color:var(--fg)"><button class="mini" id="apnsave" style="margin-left:0">Save</button></span></div>
+ <div class="sub" id="apnmsg"></div>
  <div class="lbl sh">Devices <span class="sub">(the last 4 to join)</span></div>
  <div class="sub" id="devlist" style="white-space:pre-wrap">--</div>
  <div class="row" style="margin-top:6px"><label class="sub" for="devname">This device's name</label><input id="devname" maxlength="23" placeholder="e.g. Sophie iPhone" style="width:55%;padding:4px 6px;border-radius:6px;border:1px solid var(--grid);background:var(--bg);color:var(--fg)"></div>
@@ -1282,6 +1284,7 @@ body.red .trkc button[aria-pressed=true]{background:var(--roll);border-color:var
  <div class="sub" style="margin-top:6px">Show hidden files (this phone): the microSD files card gets a Hidden tab with the VMR's own files - the chart track, the learned wave gain, ship saves - to look at or download. They are not deleted from there.</div>
  <div class="sub" style="margin-top:6px">Settings backups: Back up settings saves every setting (pins, add-ons, displays, ship data, level zero, alarms, units...) under a name in a hidden folder on the microSD card (.cfg). Restore puts one back and restarts the VMR; the all-time maxima stay as they are. A backup from firmware with a different settings layout is refused (the list marks it). Handy before Clear EEPROM in a firmware update, or to set up a second VMR the same: copy the .cfg folder across.</div>
  <div class="sub" style="margin-top:6px">Restart VMR: the log file is closed first and settings are kept; this page reconnects by itself.</div>
+ <div class="sub" style="margin-top:6px">Wi-Fi name: the hotspot is called VMR and the name typed here (up to 21 letters, digits, spaces and . _ - ( ) #), or VMR and this unit's 4-character tag with the box empty. Save restarts the hotspot under the new name: every phone drops off and has to join the new network, with the same password. A settings restore keeps this unit's name.</div>
  <div class="sub" style="margin-top:6px">Restart Wi-Fi: phones drop off for a few seconds and rejoin. Use it if a phone can't join (the hotspot takes 4).</div>
  <div class="sub" style="margin-top:6px">Devices: name this phone in the box below the list so it shows by name.</div>
  <div class="sub" style="margin-top:6px">Reset I2C bus: use it if roll and pitch freeze.</div>
@@ -1305,7 +1308,7 @@ body.red .trkc button[aria-pressed=true]{background:var(--roll);border-color:var
   <button id="fwgo" class="warn" style="width:100%;margin-top:8px" disabled>Install firmware</button>
   <div class="bar" id="fwbar" hidden><div id="fwbarv"></div></div>
   <div class="sub" id="fwmsg" style="margin-top:6px"></div>
-  <button class="mini infob">Show instructions</button><div class="info" hidden><div class="sub" style="margin-top:8px">Unlock with the password, pick the VMR's .vmr file (a compiled VMR.ino.bin works too) and Install. The VMR restarts in about 15 s; a recording stops, settings are kept. Clear EEPROM erases every setting (pin mappings, parts, ship data, level zero, mounting, GM, displays) and the all-time maxima, only once the new firmware has installed OK. If anything fails, the old firmware and the settings stay.</div><div class="sub" style="margin-top:6px">Screens off: the OLED, 7-segment and LCD stay dark from the start of the upload, through the restart and the next boot (no splash, logo or boot list), for updating in the dark. While it works the three indicator LEDs light in turn at their dimmest, whatever the switch; if it fails, the red Recording LED blinks fast for 15 s and the displays come back. LEDs wired through the AW9523 join in once the boot is done.</div></div>
+  <button class="mini infob">Show instructions</button><div class="info" hidden><div class="sub" style="margin-top:8px">Unlock with the password, pick where it goes under Install on, then its firmware: VMR_v….vmr, WTB_v….wtb or IWB_v….iwb from a release on GitHub, or the .ino.bin of your own build (Sketch → Export Compiled Binary). Each board refuses another board's image. Install. The VMR restarts in about 15 s; a recording stops, settings are kept. Clear EEPROM erases every setting (pin mappings, parts, ship data, level zero, mounting, GM, displays) and the all-time maxima, only once the new firmware has installed OK. If anything fails, the old firmware and the settings stay.</div><div class="sub" style="margin-top:6px">Screens off: the OLED, 7-segment and LCD stay dark from the start of the upload, through the restart and the next boot (no splash, logo or boot list), for updating in the dark. While it works the three indicator LEDs light in turn at their dimmest, whatever the switch; if it fails, the red Recording LED blinks fast for 15 s and the displays come back. LEDs wired through the AW9523 join in once the boot is done.</div></div>
  </div>
 </div>
 <div id="devend"></div>
@@ -1416,7 +1419,7 @@ body.red .trkc button[aria-pressed=true]{background:var(--roll);border-color:var
 </div>
 <div id="hidcards"></div>
 </main>
-<footer class="credit"><b>Vessel Measurement Recorder</b> <span id="fver"></span> · <a href="#" id="hellobtn">About</a><br>Aspect Wave LLC</footer>
+<footer class="credit"><b>Vessel Measurement Recorder</b> <span id="fver"></span> · <a href="#" id="hellobtn">About</a><br>© 2026 Aspect Wave LLC</footer>
 <div class="dlg" id="dldlg" hidden><div class="dlgbox" role="dialog" aria-labelledby="dlttl">
  <div class="lbl" id="dlttl">Downloading</div>
  <div class="sub" id="dlname" style="word-break:break-all"></div>
@@ -2042,11 +2045,12 @@ $('fwpwrow').onsubmit=async e=>{e.preventDefault();const pw=$('fwpw').value;if(!
  catch(err){$('fwpwmsg').textContent='No response from the VMR';}
  setTimeout(()=>{$('fwpwgo').disabled=false;},2000);};   // the VMR ignores another try for 2 s
 $('fwfile').onchange=()=>{const f=$('fwfile').files[0],m=t=>{$('fwmsg').textContent=t;};$('fwgo').disabled=true;m('');if(!f)return;
- const n=f.name.toLowerCase();
- const vm=$('fwtgt').value==='vmr';
- if(/\.(ino|txt|cpp|c|h)$/.test(n))return m('That is source code, and the VMR can\'t compile it. Pick the '+(vm?'.vmr file, or in the Arduino IDE use Sketch → Export Compiled Binary and pick VMR.ino.bin.':'compiled .bin file.'));
- if(!(n.endsWith('.bin')||vm&&n.endsWith('.vmr')))return m(vm?'Pick the .vmr file (or a compiled VMR.ino.bin).':'Pick the compiled .bin file.');
- if(/merged|bootloader|partitions|boot_app0/.test(n))return m('Wrong .bin: use VMR.ino.bin, the app image, not this one.');
+ const n=f.name.toLowerCase(),t=$('fwtgt').value,T=t.toUpperCase(),ino=t==='vmr'?'VMR.ino.bin':t==='wtb'?'SeaLabMOS_WTB.ino.bin':'SeaLabMOS_IWB.ino.bin';
+ if(/\.(ino|txt|cpp|c|h)$/.test(n))return m('That is source code, and the VMR can\'t compile it. In the Arduino IDE use Sketch → Export Compiled Binary and pick '+ino+'.');
+ const ext=(n.match(/\.(vmr|wtb|iwb)$/)||n.match(/(vmr|wtb|iwb)\.ino(\.[a-z_]+)?\.bin$/)||[])[1];
+ if(ext&&ext!==t)return m('That is the '+ext.toUpperCase()+'\'s firmware: pick '+(ext==='vmr'?'this VMR':'the '+ext.toUpperCase())+' under Install on, or the '+T+'\'s file.');
+ if(!ext&&!n.endsWith('.bin'))return m('Pick the '+T+'\'s firmware: '+T+'_v….'+t+' from a release, or '+ino+' from your own build.');
+ if(/merged|bootloader|partitions|boot_app0/.test(n))return m('Wrong .bin: use '+ino+', the app image, not this one.');
  if(last&&last.otaMax&&f.size>last.otaMax)return m('Too large: '+fmt(f.size)+' (room for '+fmt(last.otaMax)+').');
  m(f.name+' · '+fmt(f.size));$('fwgo').disabled=false;};
 const fwRelay=f=>{const t=$('fwtgt').value,nm=t==='wtb'?'the WTB':'the IWB';
@@ -2081,7 +2085,7 @@ $('fwgo').onclick=()=>{const f=$('fwfile').files[0];if(!f)return;
 
 try{$('fwdark').checked=localStorage.getItem('fwdark')==='1';}catch(e){}
 $('fwdark').onchange=()=>{try{localStorage.setItem('fwdark',$('fwdark').checked?'1':'0');}catch(e){}};
-$('fwtgt').onchange=()=>{const v=$('fwtgt').value==='vmr';$('fwclr').parentNode.hidden=$('fwdark').parentNode.hidden=!v;};
+$('fwtgt').onchange=()=>{const v=$('fwtgt').value==='vmr';$('fwclr').parentNode.hidden=$('fwdark').parentNode.hidden=!v;if($('fwfile').files[0])$('fwfile').onchange();};
 $('i2cr').onclick=async()=>{
  if(!confirm('Reset the I2C bus?\n\nThe IMU, EEPROM and the add-ons are switched off for 1 s. Roll and pitch drop out for about 2 s'+(isLogging?' (logging continues; those rows have no IMU data)':'')+'.'))return;
  $('i2cr').disabled=true;
@@ -3625,7 +3629,7 @@ const renderProblems=(d)=>{
 
 // ---- polling
 // Wi-Fi health (the System card): signal at the VMR, plus this page's own update timing over the last 30 s
-const link=[];let wifiName='Vessel Measurement Recorder';
+const link=[];let wifiName='VMR',apnBusy=0,apnNow=null;
 const rssiTxt=v=>v+' dBm ('+(v>=-60?'good':v>=-70?'fair':v>=-80?'weak':'poor')+')';
 const renderWifi=d=>{const w=d.wifi||{rssi:[]},ok=link.filter(x=>x.ok),miss=link.length-ok.length;
  const a=w.me!=null?'This phone '+rssiTxt(w.me):w.rssi.length?'Weakest phone '+rssiTxt(Math.min(...w.rssi)):'No phones listed';
@@ -3633,7 +3637,14 @@ const renderWifi=d=>{const w=d.wifi||{rssi:[]},ok=link.filter(x=>x.ok),miss=link
  let b='';if(ok.length){const ms=ok.reduce((s,x)=>s+x.ms,0)/ok.length,kb=ok.reduce((s,x)=>s+x.b,0)/ok.length/1024;
   b='Updates: '+Math.round(ms)+' ms · '+kb.toFixed(1)+' KB each · ≈'+Math.round(kb/(ms/1000))+' KB/s · '+Math.round(100*miss/link.length)+'% missed';}
  if(w.ssid)wifiName=w.ssid;
+ if(w.tag!=null){apnNow=w.apn||'';$('apname').placeholder=w.tag;if(document.activeElement!==$('apname')&&Date.now()-apnBusy>4000)$('apname').value=w.apn||'';}
  $('wifiinfo').innerHTML=(w.ssid?'Network "'+esc(w.ssid)+'" · channel '+w.ch+'<br>':'')+esc(a)+' · '+esc(n)+(b?'<br>'+esc(b):'');};
+$('apnsave').onclick=()=>{const v=$('apname').value.trim().replace(/\s+/g,' ');$('apname').value=v;
+ if(!/^[A-Za-z0-9 ._()#-]{0,21}$/.test(v)){$('apnmsg').textContent='Letters, digits, spaces and . _ - ( ) # only, up to 21.';return;}
+ if(v===apnNow){$('apnmsg').textContent='That is the name now.';return;}
+ if(!confirm('Rename the Wi-Fi to "VMR '+(v||$('apname').placeholder)+'"? The hotspot restarts and every phone has to join the new network.'))return;
+ apnBusy=Date.now();post('/set','apname='+encodeURIComponent(v)).then(()=>{$('apnmsg').textContent='Renamed: join "VMR '+(v||$('apname').placeholder)+'" (same password); this page reconnects once you have.';}).catch(()=>{$('apnmsg').textContent='No response from the VMR: try again.';});};
+$('apname').onkeydown=e=>{if(e.key==='Enter')$('apnsave').click();};
 const poll=async()=>{
  if(dlBusy||chUpBusy){setTimeout(poll,chUpBusy?500:100);return;}   // a download piece is coming in, or a chart pack going out: wait for it
  const t0=performance.now(),ac=new AbortController(),to=setTimeout(()=>ac.abort(),3000);

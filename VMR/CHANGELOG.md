@@ -2,7 +2,24 @@
 
 All notable changes to the Vessel Measurement Recorder (VMR) firmware and dashboard, newest first.
 
-Version numbers: a hundredths step (10.6 → 10.61) is a small change or fix, a tenths step (10.6 → 10.7) a larger one, and a whole number a big one. Dates are build dates. "Fixes" means small corrections with no change you would notice.
+Version numbers: from 14.0.0, [Semantic Versioning](https://semver.org) (MAJOR.MINOR.PATCH), as set out under Versions in `README.md`. Up to 13.51, a hundredths step (10.6 → 10.61) was a small change or fix, a tenths step (10.6 → 10.7) a larger one, and a whole number a big one. Dates are build dates. "Fixes" means small corrections with no change you would notice.
+
+## 14.0.0 · 26 Nov 2026
+
+MAJOR: the link to the WTB changed, so the VMR, WTB and IWB are updated together.
+
+- **Link version 2** (`vmr_link.h`): firmware versions travel in 16 bytes (up to 15 characters) in the BEACON, HELLO, STATUS and FWBEGIN frames. A board on link version 1 and one on version 2 ignore each other: the SeaLabMOS card shows NO WTB until both are updated. Order, all from the dashboard's Firmware update card: with the VMR still on 13.x, update the IWB to 2.0.0, then the WTB to 2.0.0, then the VMR to 14.0.0. (Over USB, any order.)
+- **Semantic versioning** from here: VMR 14.0.0, WTB and IWB 2.0.0. Released images are attached to each version's GitHub Release instead of being kept in the repository (`VMR/.vmr_files` is gone).
+- **Wi-Fi name** (the System card): the hotspot is "VMR" and a name typed there (up to 21 letters, digits, spaces and . _ - ( ) #), or "VMR" and the unit's 4-character tag (was "Vessel Measurement Recorder" and the tag). Save restarts the hotspot: phones join the new network with the same password. A settings restore keeps the unit's own name. Settings from 13.5x carry over, and backups made with 13.5x restore (the backup list no longer marks them as another version).
+- **Credits**: the CSV header's `credits` line is `Aspect Wave VMR - Copyright (c) 2026 Aspect Wave LLC - GPL-3.0-or-later`; the dashboard footer reads © 2026 Aspect Wave LLC.
+
+## 12.33–13.51 · 21–26 Nov 2026
+
+- **13.51**: The licences: GPL-3.0-or-later for the firmware and dashboard, CERN-OHL-S-2.0 for the hardware, CC BY-SA 4.0 for the docs, MIT for `vmr_reader.py` (`LICENSE`, `LICENSES/`, `REUSE.toml`, `THIRD_PARTY_NOTICES.md`, `TRADEMARKS.md`). The About dialog shows them. `vmr_reader.py` reads the fused Hs columns (`fused_hs_m`, `fused_hs_mid_m`, `fused_coh`, `baro_gain`). The demo is `docs/index.html`, published at sscopazzi.github.io/Vessel_Measurement_Recorder.
+- **13.5**: SHT30 heater (the Add-ons card, on by default): when the humidity has sat at 100 % for over a minute, the heater runs 2 min and the readings are marked heating, then settling until the temperature is back within 0.2 °C (3–15 min), with events in the file; Heat now button. Wind: under 1 kn SOG the true wind's direction comes only from the wind meter's north-mark heading, typed in the Add-ons card (none without it). The chart's past track is kept in a hidden file on the microSD card instead of memory, for 24 h up to all of it. Clear EEPROM in the System card. Drafts in decimal inches, kept to the tenth in the trim calibration. The route table's ETAs at the present SOG; the Voyage calculation card adds the times at the planned speeds. The link's VMR time frame is named VMR, not SHIP.
+- **13.41**: Plot from file runs in its own task with its stack in PSRAM: plotting a large active file no longer leaves phones unable to rejoin the Wi-Fi.
+- **13.4**: Alarms (the Alarms card): anchor watch, BNWAS, and limits for roll, heave Hs, true wind, battery and GPS lost, shown on the OLED, Fault LED and dashboard, with an optional piezo or DRV2605L vibration motor. Power-user settings. Red (night) mode fixes. The EBL starts from the right origin.
+- **12.33–13.32**: not logged one by one. From the repository's commits: Fused Hs (the IMU's and the pressure's heave combined), a maximum chart scale option, chart packs for the US west coast, and Leaflet kept on the microSD card.
 
 ## 12.x · 16–21 Nov 2026
 

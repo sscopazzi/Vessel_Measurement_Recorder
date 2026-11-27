@@ -547,7 +547,8 @@ void slmJsonSmall(String& j) {
     j += ",\"eth\":"; j += S.eth ? "true" : "false"; j += ",\"iwb\":"; j += S.iwbAlive ? "true" : "false";
     j += ",\"cast\":"; j += S.castOpen ? (int)S.castNum : 0; j += ",\"castN\":"; j += (int)S.castNum;
     j += ",\"sd\":"; j += S.sdOk ? "true" : "false"; j += ",\"sdMB\":"; j += (unsigned long)S.sdFreeMB;
-    j += ",\"fw\":[\""; j += String(S.wtbFw).substring(0, 7); j += "\",\""; j += String(S.iwbFw).substring(0, 7); j += "\"],";
+    { char a[LNK_FW + 1], c[LNK_FW + 1]; memcpy(a, S.wtbFw, LNK_FW); memcpy(c, S.iwbFw, LNK_FW); a[LNK_FW] = c[LNK_FW] = 0;
+      j += ",\"fw\":[\""; j += a; j += "\",\""; j += c; j += "\"],"; }
     jf(j, "v", S.iwbV, 2); j += ','; jf(j, "dew", S.dewpt, 1); j += ','; jf(j, "tubeT", S.tubeT, 1); j += ','; jf(j, "tubeRH", S.tubeRH, 0); j += ',';
     jf(j, "tare", S.tareDbar, 4); j += ','; jf(j, "cpu", S.iwbCpu, 0);
   }

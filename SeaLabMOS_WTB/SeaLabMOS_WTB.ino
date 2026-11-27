@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Aspect Wave LLC
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-GSW-additional-permission
 // SeaLabMOS WTB (wet-talk board) - the VMR's optional link to the in-water board (IWB)
-// Aspect Wave LLC - Sophie Scopazzi - firmware 1.11
+// Aspect Wave LLC - Sophie Scopazzi - firmware version: FW_VERSION below
 //
 // Adafruit ESP32-S2 Feather in the VMR's box, its own stack: Ethernet FeatherWing (CS 10) + Adafruit 4682
 // microSD breakout (CS 6) + Tare button (A0), Start cast button (A1), Ethernet-down LED (A2).
@@ -22,7 +22,7 @@
 //
 // Board: Adafruit Feather ESP32-S2 (arduino-esp32 3.3.x), Partition Scheme: Minimal SPIFFS
 
-#define FW_VERSION "1.11"
+#define FW_VERSION "2.0.0"      // MAJOR.MINOR.PATCH (semver.org): see Versions in README.md. Up to 15 characters (LNK_FW in vmr_link.h)
 const char FW_TAG[] = "WTBVER " FW_VERSION;
 
 // ###### CONFIG ######
@@ -85,6 +85,7 @@ bool serialDisplay   = true;
 #include <Preferences.h>
 #include <esp_task_wdt.h>
 #include "vmr_link.h"
+static_assert(sizeof(FW_VERSION) <= LNK_FW, "FW_VERSION: up to 15 characters (LNK_FW, vmr_link.h)");
 #include "teos10.h"
 
 Preferences prefs;
@@ -104,7 +105,7 @@ uint16_t castNum = 0; bool castOpen = false;
 
 // IWB
 uint32_t lastLineMs = 0, lastSeq = 0, lastTimeSentMs = 0; bool iwbAlive = false, iwbEverSeen = false;
-char iwbFw[8] = "";
+char iwbFw[LNK_FW] = "";
 float tareDbar = NAN, iwbV = NAN, tubeT = NAN, tubeRH = NAN, dewpt = NAN, iwbCpu = NAN, ecGain = NAN;
 float dewBase = NAN; bool dewWarned = false, lowVWarned = false;
 float lastDepth = NAN;
@@ -364,7 +365,7 @@ void onHousekeeping(char** f, int n) {
   // SLH,seq,ms,cpu_c,int_t_c,int_rh_pct,dewpt_c,v_in,fw
   if (n < 9) return;
   iwbCpu = numOrNan(f[3]); tubeT = numOrNan(f[4]); tubeRH = numOrNan(f[5]); dewpt = numOrNan(f[6]); iwbV = numOrNan(f[7]);
-  strncpy(iwbFw, f[8], sizeof(iwbFw) - 1);
+  strlcpy(iwbFw, f[8], sizeof(iwbFw));
   hkPending = true;
   if (!isnan(dewpt)) {
     if (isnan(dewBase)) dewBase = dewpt;
@@ -848,7 +849,7 @@ void handleFrame(const RxF& f) {
     else if (!paired && q->pairOpen) {                               // unpaired: answer the VMR whose "Pair WTB" is open
       chanLocked = true; lastBeaconMs = millis();
       memcpy(vmrMac, f.mac, 6); vmrKnown = true; addVmrPeer(false);
-      BHello hb = {}; strncpy(hb.fw, FW_VERSION, 7); strncpy(hb.name, SYSTEM_NAME, 15);
+      BHello hb = {}; strlcpy(hb.fw, FW_VERSION, sizeof(hb.fw)); strncpy(hb.name, SYSTEM_NAME, 15);
       lnkSend(T_HELLO, &hb, sizeof(hb));
     }
     return;
@@ -892,7 +893,7 @@ void handleFrame(const RxF& f) {
 
 void sendStatus() {
   BStatus s = {};
-  strncpy(s.wtbFw, FW_VERSION, 7); strncpy(s.iwbFw, iwbFw, 7);
+  strlcpy(s.wtbFw, FW_VERSION, sizeof(s.wtbFw)); strlcpy(s.iwbFw, iwbFw, sizeof(s.iwbFw));
   s.eth = ethUp; s.iwbAlive = iwbAlive; s.state = state; s.castOpen = castOpen; s.manual = manual; s.sdOk = sdOk; s.castNum = castNum;
   s.depthM = iwbAlive ? lastDepth : NAN; s.tareDbar = tareDbar; s.iwbV = iwbV; s.tubeT = tubeT; s.tubeRH = tubeRH; s.dewpt = dewpt; s.iwbCpu = iwbCpu;
   s.sdFreeMB = sdOk ? (uint32_t)((SD.totalBytes() - SD.usedBytes()) >> 20) : 0;
